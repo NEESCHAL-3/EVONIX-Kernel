@@ -22,6 +22,8 @@
  */
 
 #include <linux/init.h>
+#include <linux/workqueue.h>
+#include <linux/jiffies.h>
 #include <linux/kd.h>
 #include <linux/kernel.h>
 #include <linux/kernel_read_file.h>
@@ -107,6 +109,38 @@
 #define SELINUX_INODE_INIT_XATTRS 1
 
 struct selinux_state selinux_state;
+
+#ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+#define EVONIX_SELINUX_ENFORCE_DELAY_MS 30000U
+
+bool evonix_selinux_enforce_gate;
+
+static void evonix_selinux_enforce_workfn(struct work_struct *work)
+{
+	WRITE_ONCE(evonix_selinux_enforce_gate, true);
+	enforcing_set(true);
+
+	pr_notice("SELinux: EVONIX FOD probe switched to enforcing\n");
+}
+
+static DECLARE_DELAYED_WORK(evonix_selinux_enforce_work,
+			    evonix_selinux_enforce_workfn);
+
+static int __init evonix_selinux_schedule_enforcing(void)
+{
+	bool scheduled;
+
+	scheduled = schedule_delayed_work(
+		&evonix_selinux_enforce_work,
+		msecs_to_jiffies(EVONIX_SELINUX_ENFORCE_DELAY_MS));
+
+	pr_notice("SELinux: EVONIX FOD probe early permissive window=%u ms scheduled=%d\n",
+		  EVONIX_SELINUX_ENFORCE_DELAY_MS, scheduled);
+
+	return 0;
+}
+late_initcall(evonix_selinux_schedule_enforcing);
+#endif
 
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
@@ -7296,6 +7330,9 @@ static __init int selinux_init(void)
 	pr_info("SELinux:  Initializing.\n");
 
 	memset(&selinux_state, 0, sizeof(selinux_state));
+#ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+	WRITE_ONCE(evonix_selinux_enforce_gate, false);
+#endif
 	enforcing_set(selinux_enforcing_boot);
 	selinux_avc_init();
 	mutex_init(&selinux_state.status_lock);
@@ -7324,7 +7361,7 @@ static __init int selinux_init(void)
 	if (avc_add_callback(selinux_lsm_notifier_avc_callback, AVC_CALLBACK_RESET))
 		panic("SELinux: Unable to register AVC LSM notifier callback\n");
 
-	if (selinux_enforcing_boot)
+	if (enforcing_enabled())
 		pr_debug("SELinux:  Starting in enforcing mode\n");
 	else
 		pr_debug("SELinux:  Starting in permissive mode\n");

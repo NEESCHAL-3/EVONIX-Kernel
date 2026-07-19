@@ -122,6 +122,12 @@ static inline void selinux_mark_initialized(void)
 }
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+/*
+ * EVONIX FOD diagnostic gate:
+ * keep SELinux permissive during early MiTEE/Goodix initialization.
+ */
+extern bool evonix_selinux_enforce_gate;
+
 static inline bool enforcing_enabled(void)
 {
 	return READ_ONCE(selinux_state.enforcing);
@@ -129,6 +135,9 @@ static inline bool enforcing_enabled(void)
 
 static inline void enforcing_set(bool value)
 {
+	if (value && !READ_ONCE(evonix_selinux_enforce_gate))
+		value = false;
+
 	WRITE_ONCE(selinux_state.enforcing, value);
 }
 #else
