@@ -111,7 +111,7 @@
 struct selinux_state selinux_state;
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-#define EVONIX_SELINUX_ENFORCE_DELAY_MS 30000U
+#define EVONIX_SELINUX_ENFORCE_DELAY_MS 8000U
 
 bool evonix_selinux_enforce_gate;
 
