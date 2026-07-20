@@ -19,9 +19,9 @@
 #include "evonix_rodin_internal.h"
 
 #define EVX_INPUT_NAME			"evonix_rodin_input"
-#define EVX_TOUCH_DOWN_HOLD_MS		180U
-#define EVX_TOUCH_MOVE_HOLD_MS		120U
-#define EVX_TOUCH_REFRESH_MS		24U
+#define EVX_TOUCH_DOWN_HOLD_MS		220U
+#define EVX_TOUCH_MOVE_HOLD_MS		160U
+#define EVX_TOUCH_REFRESH_MS		8U
 
 struct evx_input_handle {
 	struct input_handle handle;
@@ -89,7 +89,7 @@ static void evx_input_event(struct input_handle *handle,
 		if (value > 0) {
 			atomic64_inc(&evx_touch_downs);
 			evx_rodin_request_state(
-				EVX_RODIN_INTERACTIVE,
+				EVX_RODIN_FRAME_PRESSURE,
 				EVX_TOUCH_DOWN_HOLD_MS);
 		}
 
@@ -106,7 +106,7 @@ static void evx_input_event(struct input_handle *handle,
 		if (value >= 0) {
 			atomic64_inc(&evx_touch_downs);
 			evx_rodin_request_state(
-				EVX_RODIN_INTERACTIVE,
+				EVX_RODIN_FRAME_PRESSURE,
 				EVX_TOUCH_DOWN_HOLD_MS);
 		}
 		break;

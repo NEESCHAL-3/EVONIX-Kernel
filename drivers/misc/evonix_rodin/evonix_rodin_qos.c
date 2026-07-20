@@ -62,13 +62,13 @@ evx_state_min_khz[EVX_RODIN_STATE_MAX][EVX_QOS_DOMAINS] = {
 		0, 0, 0,
 	},
 	[EVX_RODIN_INTERACTIVE] = {
-		700000, 1200000, 0,
+		800000, 1400000, 0,
 	},
 	[EVX_RODIN_SUSTAINED] = {
-		600000, 1400000, 0,
+		700000, 1600000, 0,
 	},
 	[EVX_RODIN_FRAME_PRESSURE] = {
-		800000, 1600000, 1200000,
+		900000, 1800000, 1400000,
 	},
 };
 
@@ -160,13 +160,13 @@ static int evx_qos_state_changed(struct notifier_block *nb,
 	/*
 	 * The state notifier is atomic. Queue all QoS work into process context.
 	 */
-	schedule_work(&evx_qos_apply_work);
+	queue_work(system_highpri_wq, &evx_qos_apply_work);
 	return NOTIFY_OK;
 }
 
 void evx_rodin_qos_refresh(void)
 {
-	schedule_work(&evx_qos_apply_work);
+	queue_work(system_highpri_wq, &evx_qos_apply_work);
 }
 
 static struct notifier_block evx_qos_state_notifier = {
@@ -236,7 +236,7 @@ static void evx_qos_retry_workfn(struct work_struct *work)
 	mutex_unlock(&evx_qos_lock);
 
 	if (ready) {
-		schedule_work(&evx_qos_apply_work);
+		queue_work(system_highpri_wq, &evx_qos_apply_work);
 		pr_info(EVX_QOS_NAME ": all CPU domains ready\n");
 		return;
 	}
