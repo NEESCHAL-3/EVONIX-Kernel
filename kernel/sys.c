@@ -2478,8 +2478,8 @@ static int prctl_get_auxv(void __user *addr, unsigned long len)
 SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 		unsigned long, arg4, unsigned long, arg5)
 {
-    if (option == PR_EVX_PRISMA_CHALLENGE)
-        return evx_prisma_prctl(arg2, arg3, arg4, arg5);
+	if (option == PR_EVX_PRISMA_CHALLENGE)
+		return evx_prisma_prctl(arg2, arg3, arg4, arg5);
 
 	struct task_struct *me = current;
 	unsigned char comm[sizeof(me->comm)];
