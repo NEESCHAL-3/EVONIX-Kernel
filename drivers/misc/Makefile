@@ -74,4 +74,5 @@ obj-$(CONFIG_PKVM_SMC_FILTER)  += pkvm-smc/
 obj-y += evonix_cos/
 
 # Evonix Rodin kernel optimizer
-obj-y += evonix_rodin/
+# EVONIX v3.1: use the stock MediaTek scheduling, FPSGO and thermal stack
+# obj-y += evonix_rodin/

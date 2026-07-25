@@ -122,43 +122,12 @@ extern int security_context_to_sid_with_policy(
 	gfp_t gfp_flags);
 #endif
 
-#ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-#define EVONIX_SELINUX_ENFORCE_DELAY_MS 8000U
-
-bool evonix_selinux_enforce_gate;
-
-static void evonix_selinux_enforce_workfn(struct work_struct *work)
-{
-	WRITE_ONCE(evonix_selinux_enforce_gate, true);
-	enforcing_set(true);
-
-	pr_notice("SELinux: EVONIX FOD probe switched to enforcing\n");
-}
-
-static DECLARE_DELAYED_WORK(evonix_selinux_enforce_work,
-			    evonix_selinux_enforce_workfn);
-
-static int __init evonix_selinux_schedule_enforcing(void)
-{
-	bool scheduled;
-
-	scheduled = schedule_delayed_work(
-		&evonix_selinux_enforce_work,
-		msecs_to_jiffies(EVONIX_SELINUX_ENFORCE_DELAY_MS));
-
-	pr_notice("SELinux: EVONIX FOD probe early permissive window=%u ms scheduled=%d\n",
-		  EVONIX_SELINUX_ENFORCE_DELAY_MS, scheduled);
-
-	return 0;
-}
-late_initcall(evonix_selinux_schedule_enforcing);
-#endif
 
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-static int selinux_enforcing_boot __initdata;
+static int selinux_enforcing_boot __initdata = 1;
 
 static int __init enforcing_setup(char *str)
 {
@@ -7382,7 +7351,6 @@ static __init int selinux_init(void)
 
 	memset(&selinux_state, 0, sizeof(selinux_state));
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-	WRITE_ONCE(evonix_selinux_enforce_gate, false);
 #endif
 	enforcing_set(selinux_enforcing_boot);
 	selinux_avc_init();
