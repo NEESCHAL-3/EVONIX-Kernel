@@ -4,13 +4,15 @@
 #
 # Override Kleaf's reproducible placeholder identity for EVONIX builds.
 : "${EVONIX_BUILD_USER:=NEESCHAL}"
-: "${EVONIX_BUILD_HOST:=EVONIX}"
+: "${EVONIX_BUILD_HOST:=CODE}"
 
 KBUILD_BUILD_USER="$EVONIX_BUILD_USER"
 KBUILD_BUILD_HOST="$EVONIX_BUILD_HOST"
 
 if test -n "$EVONIX_BUILD_TIMESTAMP"; then
 	KBUILD_BUILD_TIMESTAMP="$EVONIX_BUILD_TIMESTAMP"
+else
+	KBUILD_BUILD_TIMESTAMP="$(TZ=Asia/Kathmandu date '+%a %b %d %H:%M:%S %z %Y')"
 fi
 
 export KBUILD_BUILD_USER
