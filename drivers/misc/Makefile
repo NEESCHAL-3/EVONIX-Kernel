@@ -75,4 +75,3 @@ obj-y += evonix_cos/
 
 # Evonix Rodin kernel optimizer
 # EVONIX v3.1: use the stock MediaTek scheduling, FPSGO and thermal stack
-# obj-y += evonix_rodin/
