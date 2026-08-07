@@ -5,6 +5,7 @@
  */
 
 #include <linux/backlight.h>
+#include <linux/bootconfig.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -21,6 +22,35 @@
 static struct led_classdev evx_lcd_backlight1_cdev;
 static struct backlight_device *evx_panel1_bd;
 static struct kobject *evx_oplus_display_kobj;
+
+/*
+ * ColorOS mirror backlight nodes are for Android userspace only.
+ * Recovery must use the native Xiaomi/MTK backlight/display path.
+ */
+static bool __init evx_is_recovery_boot(void)
+{
+#ifdef CONFIG_BOOT_CONFIG
+	struct xbc_node *vnode = NULL;
+	const char *value;
+
+	value = xbc_find_value("androidboot.mode", &vnode);
+	if (value && !strcmp(value, "recovery"))
+		return true;
+
+	vnode = NULL;
+	value = xbc_find_value("androidboot.bootmode", &vnode);
+	if (value && !strcmp(value, "recovery"))
+		return true;
+#endif
+
+	if (saved_command_line &&
+	    (strstr(saved_command_line, "androidboot.mode=recovery") ||
+	     strstr(saved_command_line, "androidboot.bootmode=recovery") ||
+	     strstr(saved_command_line, "bootmode=recovery")))
+		return true;
+
+	return false;
+}
 
 static int evx_read_int_file(const char *path, int fallback)
 {
@@ -97,6 +127,12 @@ static int __init evx_cos_display_compat_init(void)
 {
 	struct backlight_properties props = {};
 	int ret;
+
+	if (evx_is_recovery_boot()) {
+		pr_info(EVX_DISPLAY_NAME
+			": recovery boot detected; skipping ColorOS display mirror nodes\n");
+		return 0;
+	}
 
 	evx_lcd_backlight1_cdev.name = "lcd-backlight1";
 	evx_lcd_backlight1_cdev.max_brightness = 2047;
