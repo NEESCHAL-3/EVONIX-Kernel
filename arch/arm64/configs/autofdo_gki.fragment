@@ -1,1 +1,3 @@
 CONFIG_AUTOFDO_CLANG=y
+# CONFIG_ARM64_MTE is not set
+# CONFIG_KASAN is not set
