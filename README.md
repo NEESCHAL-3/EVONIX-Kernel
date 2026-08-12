@@ -16,9 +16,7 @@ compatibility interfaces, storage tuning, and a BBRv3/FQ networking stack.
 | Item | Value |
 | --- | --- |
 | Device | Poco X7 Pro (`rodin`) |
-| Android kernel base | AOSP `android15-6.6-lts` |
-| Kernel release | Linux 6.6.139 with EVONIX branding |
-| Maintained branch | `main` |
+| Maintained branches | All active ColorOS and HyperOS variants |
 | Build system | Kleaf / Bazel |
 | License | GPL-2.0-only; see [COPYING](COPYING) |
 
