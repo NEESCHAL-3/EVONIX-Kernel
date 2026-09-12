@@ -29,7 +29,9 @@ preempt-flag-$(CONFIG_PREEMPT_DYNAMIC)	:= PREEMPT_DYNAMIC
 preempt-flag-$(CONFIG_PREEMPT_RT)	:= PREEMPT_RT
 
 build-version = $(or $(KBUILD_BUILD_VERSION), $(build-version-auto))
-build-timestamp = $(or $(KBUILD_BUILD_TIMESTAMP), $(build-timestamp-auto))
+# EVONIX: use the actual compile time instead of Kleaf's
+# reproducible SOURCE_DATE_EPOCH / Git commit timestamp.
+build-timestamp := $(shell TZ=Asia/Kathmandu LC_ALL=C date '+%a %b %d %H:%M:%S %z %Y')
 
 # Maximum length of UTS_VERSION is 64 chars
 filechk_uts_version = \

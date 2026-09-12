@@ -1290,6 +1290,7 @@ static __always_inline bool free_pages_prepare(struct page *page,
 	page_cpupid_reset_last(page);
 	page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
 	trace_android_vh_mm_free_page(page);
+	page->private = 0;
 	reset_page_owner(page, order);
 	free_page_pinner(page, order);
 	page_table_check_free(page, order);
@@ -6761,11 +6762,16 @@ int __alloc_contig_migrate_range(struct compact_control *cc,
 	unsigned long total_mapped = 0;
 	unsigned long total_migrated = 0;
 	unsigned long total_reclaimed = 0;
+	bool skip_lru_cache = false;
 
 	if (cc->gfp_mask & __GFP_NORETRY)
 		max_tries = 1;
 
-	lru_cache_disable();
+	trace_android_vh_alloc_contig_range_skip_lru(
+		start, end, migratetype, cc->gfp_mask, &skip_lru_cache);
+
+	if (!skip_lru_cache)
+		lru_cache_disable();
 
 	while (pfn < end || !list_empty(&cc->migratepages)) {
 		if (fatal_signal_pending(current)) {
@@ -6809,7 +6815,8 @@ int __alloc_contig_migrate_range(struct compact_control *cc,
 			break;
 	}
 
-	lru_cache_enable();
+	if (!skip_lru_cache)
+		lru_cache_enable();
 	if (ret < 0) {
 		if (!(cc->gfp_mask & __GFP_NOWARN) && ret == -EBUSY) {
 			struct page *page;
