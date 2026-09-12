@@ -221,6 +221,9 @@ DECLARE_HOOK(android_vh_mem_cgroup_css_online,
 DECLARE_HOOK(android_vh_mem_cgroup_css_offline,
 	TP_PROTO(struct cgroup_subsys_state *css, struct mem_cgroup *memcg),
 	TP_ARGS(css, memcg));
+DECLARE_HOOK(android_vh_mem_cgroup_handle_over_high,
+	TP_PROTO(bool *record_psi),
+	TP_ARGS(record_psi));
 DECLARE_HOOK(android_vh_refault_filemap_add_folio,
 	TP_PROTO(struct folio *folio, void *shadow, gfp_t gfp, int *ret),
 	TP_ARGS(folio, shadow, gfp, ret));
@@ -546,6 +549,9 @@ DECLARE_HOOK(android_vh_filemap_map_pages,
 DECLARE_HOOK(android_vh_thaw_killed_process,
 	TP_PROTO(bool *thaw),
 	TP_ARGS(thaw));
+DECLARE_HOOK(android_vh_page_cache_read,
+	TP_PROTO(struct inode *inode, pgoff_t index, unsigned long count),
+	TP_ARGS(inode, index, count));
 DECLARE_HOOK(android_vh_page_cache_readahead_start,
 	TP_PROTO(struct file *file, pgoff_t pgoff,
 		unsigned int size, bool sync),
@@ -679,6 +685,9 @@ DECLARE_HOOK(android_vh_reuse_whole_anon_folio,
 DECLARE_HOOK(android_vh_alloc_swap_slot_cache,
 	TP_PROTO(void *cache),
 	TP_ARGS(cache));
+DECLARE_RESTRICTED_HOOK(android_rvh_alloc_swap_slot_cache,
+	TP_PROTO(void *cache, swp_entry_t *entry, bool *bypass),
+	TP_ARGS(cache, entry, bypass), 1);
 DECLARE_HOOK(android_vh_calculate_totalreserve_pages,
 	TP_PROTO(bool *skip),
 	TP_ARGS(skip));
@@ -823,6 +832,39 @@ DECLARE_HOOK(android_vh_folio_end_writeback,
 DECLARE_HOOK(android_vh_folio_start_writeback,
 	TP_PROTO(struct folio *folio),
 	TP_ARGS(folio));
+DECLARE_HOOK(android_vh_check_swap_entry_range_free,
+	TP_PROTO(struct swap_info_struct *si, swp_entry_t *entry,\
+		 unsigned int nr_pages),
+	TP_ARGS(si, entry, nr_pages));
+DECLARE_HOOK(android_vh_folio_alloc_swap_bypass,
+	TP_PROTO(swp_entry_t *entry, struct folio *folio, bool *bypass),
+	TP_ARGS(entry, folio, bypass));
+DECLARE_HOOK(android_vh_swap_device_swapon,
+	TP_PROTO(struct swap_info_struct *si),
+	TP_ARGS(si));
+	DECLARE_HOOK(android_vh_swap_device_swapoff,
+	TP_PROTO(struct swap_info_struct *si),
+	TP_ARGS(si));
+
+DECLARE_HOOK(android_vh_has_unmovable_pages_bypass,
+	TP_PROTO(unsigned long start_pfn, unsigned long end_pfn, int migratetype, bool *bypass),
+	TP_ARGS(start_pfn, end_pfn, migratetype, bypass));
+DECLARE_HOOK(android_vh_alloc_contig_range_skip_lru,
+	TP_PROTO(unsigned long start_pfn, unsigned long end_pfn, int migratetype, gfp_t gfp_mask, bool *skip_lru_cache),
+	TP_ARGS(start_pfn, end_pfn, migratetype, gfp_mask, skip_lru_cache));
+DECLARE_HOOK(android_vh_migration_entry_wait_enter,
+	TP_PROTO(swp_entry_t entry, u64 *time, int *zonenum),
+	TP_ARGS(entry, time, zonenum));
+DECLARE_HOOK(android_vh_migration_entry_wait_exit,
+	TP_PROTO(u64 time, int zonenum),
+	TP_ARGS(time, zonenum));
+DECLARE_HOOK(android_vh_migrate_pages_batch_break,
+	TP_PROTO(struct folio *folio, struct list_head *head,
+	int reason, bool *should_break, int *nr_left),
+	TP_ARGS(folio, head, reason, should_break, nr_left));
+DECLARE_HOOK(android_vh_migrate_batch_nr_pages,
+	TP_PROTO(struct list_head *head, int *nr_pages),
+	TP_ARGS(head, nr_pages));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */
