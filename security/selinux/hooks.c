@@ -7352,7 +7352,7 @@ static __init int selinux_init(void)
 	memset(&selinux_state, 0, sizeof(selinux_state));
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
 #endif
-	enforcing_set(selinux_enforcing_boot);
+	enforcing_set(false);
 	selinux_avc_init();
 	mutex_init(&selinux_state.status_lock);
 	mutex_init(&selinux_state.policy_mutex);
