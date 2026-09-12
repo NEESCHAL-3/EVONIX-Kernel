@@ -127,7 +127,7 @@ extern int security_context_to_sid_with_policy(
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
 #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
-static int selinux_enforcing_boot __initdata = 1;
+static int selinux_enforcing_boot __initdata = 0;
 
 static int __init enforcing_setup(char *str)
 {
@@ -138,7 +138,7 @@ static int __init enforcing_setup(char *str)
 }
 __setup("enforcing=", enforcing_setup);
 #else
-#define selinux_enforcing_boot 1
+#define selinux_enforcing_boot 0
 #endif
 
 int selinux_enabled_boot __initdata = 1;
