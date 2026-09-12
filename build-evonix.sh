@@ -121,6 +121,7 @@ cd "$WORKSPACE"
 
 "$BAZEL" run \
     --config=fast \
+    --lto=thin \
     --user_clang_toolchain="$CLANG23" \
     //common:kernel_aarch64_dist -- \
     --dist_dir="$DIST"
