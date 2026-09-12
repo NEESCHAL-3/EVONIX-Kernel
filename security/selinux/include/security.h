@@ -136,12 +136,14 @@ static inline void enforcing_set(bool value)
 #else
 static inline bool enforcing_enabled(void)
 {
-	return true;
+        return false;
 }
 
 static inline void enforcing_set(bool value)
 {
+        WRITE_ONCE(selinux_state.enforcing, false);
 }
+
 #endif
 
 static inline bool checkreqprot_get(void)
