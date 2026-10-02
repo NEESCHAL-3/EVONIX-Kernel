@@ -74,5 +74,5 @@ obj-$(CONFIG_PKVM_SMC_FILTER)  += pkvm-smc/
 # Evonix Rodin kernel optimizer
 # EVONIX v3.1: use the stock MediaTek scheduling, FPSGO and thermal stack
 
-# EVONIX HyperOS charger power-path bypass
-obj-y += evonix_hyperos_bypass.o
+# EVONIX HyperOS OEM charger-policy bypass
+obj-y += evonix_oem_bypass.o
