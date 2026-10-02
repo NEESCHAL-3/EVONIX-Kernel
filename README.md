@@ -34,6 +34,13 @@ compatibility interfaces, storage tuning, and a BBRv3/FQ networking stack.
 The implementation map and security-sensitive design choices are documented in
 [Documentation/evonix/ARCHITECTURE.md](Documentation/evonix/ARCHITECTURE.md).
 
+## Bypass charging
+
+Maintained Rodin branches share an Image-only OEM charge-pause backend. It
+does not use input suspend or replace vendor_boot/recovery. Operation,
+measurement limits, interfaces and the tested scope are described in
+[Bypass charging](Documentation/evonix/BYPASS_CHARGING.md).
+
 ## Build
 
 This repository is the `common/` project inside an Android kernel `repo`
