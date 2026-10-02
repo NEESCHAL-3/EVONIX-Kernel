@@ -73,5 +73,8 @@ obj-$(CONFIG_PKVM_SMC_FILTER)  += pkvm-smc/
 # EVONIX ColorOS compatibility
 obj-y += evonix_cos/
 
+# EVONIX ColorOS OEM charger-policy bypass
+obj-y += evonix_oem_bypass.o
+
 # Evonix Rodin kernel optimizer
 # EVONIX v3.1: use the stock MediaTek scheduling, FPSGO and thermal stack
