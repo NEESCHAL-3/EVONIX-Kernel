@@ -44,7 +44,7 @@ static __maybe_unused inline int lookup_bdev_compat(char *path, dev_t *out) {
 #endif
 
 // https://github.com/torvalds/linux/commit/22ae8ce8b89241c94ac00c237752c0ffa37ba5ae
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0) 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0)
 
 static __maybe_unused bool bbg_is_named_device(dev_t dev, const char *name_prefix)
 {
