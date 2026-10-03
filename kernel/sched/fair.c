@@ -96,9 +96,14 @@ unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_LOG;
  *
  * (default: 0.70 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
-unsigned int sysctl_sched_base_slice			= 700000ULL;
+#ifdef CONFIG_EVONIX_RODIN_SCHED_SLICE_US
+#define EVONIX_BASE_SLICE_NS (CONFIG_EVONIX_RODIN_SCHED_SLICE_US * 1000U)
+#else
+#define EVONIX_BASE_SLICE_NS 700000U
+#endif
+unsigned int sysctl_sched_base_slice			= EVONIX_BASE_SLICE_NS;
 EXPORT_SYMBOL_GPL(sysctl_sched_base_slice);
-static unsigned int normalized_sysctl_sched_base_slice	= 700000ULL;
+static unsigned int normalized_sysctl_sched_base_slice	= EVONIX_BASE_SLICE_NS;
 
 /*
  * After fork, child runs first. If set to 0 (default) then
