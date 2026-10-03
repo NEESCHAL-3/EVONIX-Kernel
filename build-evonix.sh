@@ -121,6 +121,7 @@ cd "$WORKSPACE"
 
 "$BAZEL" run \
     --config=fast \
+    --jobs="${EVONIX_JOBS:-8}" \
     --lto=thin \
     --user_clang_toolchain="$CLANG23" \
     //common:kernel_aarch64_dist -- \
@@ -155,7 +156,16 @@ for option in \
     CONFIG_LTO=y \
     CONFIG_LTO_CLANG=y \
     CONFIG_LTO_CLANG_THIN=y \
-    CONFIG_AUTOFDO_CLANG=y
+    CONFIG_AUTOFDO_CLANG=y \
+    CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y \
+    CONFIG_ARM64_TUNE_CORTEX_A725=y \
+    CONFIG_EVONIX_RODIN_SCHED_SLICE_US=500 \
+    CONFIG_NR_CPUS=32 \
+    CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y \
+    CONFIG_BBG=y \
+    CONFIG_RCU_LAZY=y \
+    CONFIG_KFENCE=y \
+    CONFIG_KFENCE_DEFERRABLE=y
 do
     grep -qx "$option" "$CFG" ||
         die "Final kernel config is missing: $option"
@@ -163,6 +173,20 @@ done
 
 if grep -qx 'CONFIG_LTO_NONE=y' "$CFG"; then
     die "Final kernel unexpectedly contains CONFIG_LTO_NONE=y."
+fi
+
+if grep -Eq '^CONFIG_CC_OPTIMIZE_FOR_(PERFORMANCE_O3|SIZE)=y$' "$CFG"; then
+    die "Final config unexpectedly selected experimental O3 or size optimization."
+fi
+
+if grep -qx 'CONFIG_RCU_LAZY_DEFAULT_OFF=y' "$CFG"; then
+    die "RCU lazy batching unexpectedly remains default-off."
+fi
+
+grep '^CONFIG_LSM=' "$CFG" | grep -q 'baseband_guard' ||
+    die "Baseband-guard is compiled but not selected in CONFIG_LSM."
+if grep -Eq '^CONFIG_BBG_BLOCK_(BOOT|RECOVERY)=y$' "$CFG"; then
+    die "Baseband-guard unexpectedly blocks kernel/recovery update paths."
 fi
 
 KERNEL_VERSION="$(strings "$DIST/Image" | grep -m1 'Linux version' || true)"
@@ -175,7 +199,7 @@ grep -q 'r614150' <<<"$KERNEL_VERSION" ||
 
 echo "Final config:"
 grep -E \
-'^(CONFIG_LTO|CONFIG_LTO_CLANG|CONFIG_LTO_CLANG_THIN|CONFIG_LTO_NONE|CONFIG_AUTOFDO_CLANG)=' \
+'^(CONFIG_LTO|CONFIG_LTO_CLANG|CONFIG_LTO_CLANG_THIN|CONFIG_LTO_NONE|CONFIG_AUTOFDO_CLANG|CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE|CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3|CONFIG_ARM64_TUNE_CORTEX_A725|CONFIG_RCU_LAZY|CONFIG_KFENCE|CONFIG_KFENCE_DEFERRABLE)=' \
 "$CFG" || true
 
 echo
