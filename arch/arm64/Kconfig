@@ -417,6 +417,31 @@ source "arch/arm64/Kconfig.platforms"
 
 menu "Kernel Features"
 
+config ARM64_TUNE_CORTEX_A725
+	bool "Tune generated code for Cortex-A725"
+	depends on CC_IS_CLANG
+	depends on $(cc-option,-mtune=cortex-a725)
+	help
+	  Optimize instruction scheduling for the Cortex-A725 CPUs used by
+	  MediaTek MT6899 / rodin. This is compiler tuning only: unlike -mcpu
+	  or -march it does not enable additional instruction-set features,
+	  change the kernel ABI, or force CPU frequencies.
+
+	  Leave disabled for generic kernels targeting other CPU families.
+
+config EVONIX_RODIN_SCHED_SLICE_US
+	int "Rodin EEVDF normalized base slice (microseconds)"
+	depends on ARM64_TUNE_CORTEX_A725
+	range 500 700
+	default 700
+	help
+	  Test-only tuning for the eight-core MT6899 Rodin builds. A value of
+	  500 requests a 2 ms base slice with eight CPUs and stock logarithmic
+	  scaling; 700 retains the upstream 2.8 ms default. Shorter slices can
+	  reduce service gaps under contention but increase context switching.
+	  Keep stock CPU placement, governors, and thermal policies. Compare
+	  frame-time tails and energy before selecting a release value.
+
 menu "ARM errata workarounds via the alternatives framework"
 
 config AMPERE_ERRATUM_AC03_CPU_38
