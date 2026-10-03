@@ -1,82 +1,57 @@
 # EVONIX Kernel
 
-EVONIX is an Android 15 kernel based on the AOSP `android15-6.6-lts` common
-kernel and tuned for the Poco X7 Pro (`rodin`). The project combines device
-compatibility work with a Rodin-specific performance controller, ColorOS
-compatibility interfaces, storage tuning, and a BBRv3/FQ networking stack.
+EVONIX is an Android 15 / Linux 6.6.142 kernel for Poco X7 Pro (`rodin`).
+V4.0 provides separate enforcing HyperOS and ColorOS builds, with either
+KernelSU Next + SUSFS or no built-in root.
 
-> [!WARNING]
-> The current `main` lineage is a development kernel. It deliberately keeps
-> SELinux permissive and relaxes kernel-module version checks for vendor-module
-> compatibility. Do not treat it as a production-security configuration. Read
-> [SECURITY.md](SECURITY.md) before flashing or redistributing a build.
+## V4.0
 
-## Project profile
+- Cortex-A725 instruction scheduling with the existing arm64 ISA.
+- Rodin EEVDF base slice of 500 microseconds; stock frequency governors retained.
+- Power-efficient eligible workqueues, lazy RCU callbacks and deferrable KFENCE.
+- Shared OEM charge-pause backend replacing the previous bypass implementation.
+- Baseband-guard partition-write filtering with policy-aware credential tracking.
+- KernelSU Next v3.4.0 and SUSFS v2.3.0 in KSU variants.
+- Existing BBRv3/FQ and Kyber support retained.
 
-| Item | Value |
-| --- | --- |
-| Device | Poco X7 Pro (`rodin`) |
-| Android kernel base | AOSP `android15-6.6-lts` |
-| Maintained branches | All active ColorOS and HyperOS variants |
-| Build system | Kleaf / Bazel |
-| License | GPL-2.0-only; see [COPYING](COPYING) |
+See [CHANGELOG.md](CHANGELOG.md) for changes and validation scope.
 
-## Highlights
+## Choose your build
 
-- Google BBRv3 backport with BBR and FQ selected by the EVONIX config fragment.
-- Event-driven Rodin workload, input, CPU QoS, I/O, charging, and thermal policy.
-- Real-backed ColorOS compatibility nodes for power, display, storage, scheduler,
-  AFS, QoS, and procfs consumers.
-- Kyber support and EVONIX policy for physical UFS queues.
-- Vendor Wi-Fi/Bluetooth module compatibility across the target GKI integration.
-- Reproducible arm64 Kleaf build with strict KMI checking and an SPDX SBOM.
+| ROM family | Built-in root | Branch |
+| --- | --- | --- |
+| HyperOS | KernelSU Next + SUSFS | `hyperos/ksu-susfs` |
+| HyperOS | None | `hyperos/normal` |
+| ColorOS port | KernelSU Next + SUSFS | `coloros/ksu-susfs` |
+| ColorOS port | None | `coloros/normal` |
 
-The implementation map and security-sensitive design choices are documented in
-[Documentation/evonix/ARCHITECTURE.md](Documentation/evonix/ARCHITECTURE.md).
+The default branch is `hyperos/ksu-susfs`. The permissive branch is excluded
+from V4.0 and was not updated.
 
-## Bypass charging
+## Build and integration
 
-Maintained Rodin branches share an Image-only OEM charge-pause backend. It
-does not use input suspend or replace vendor_boot/recovery. Operation,
-measurement limits, interfaces and the tested scope are described in
-[Bypass charging](Documentation/evonix/BYPASS_CHARGING.md).
+This repository is the `common/` project in an Android Kleaf workspace,
+not a standalone build environment. Follow
+[BUILDING.md](Documentation/evonix/BUILDING.md), including the pinned
+Clang 23 toolchain, ThinLTO and AutoFDO profile.
 
-## Build
+Release ZIPs replace the kernel Image through AnyKernel; they do not replace
+vendor_boot, recovery or vendor modules. OEM bypass operation, supported
+interfaces and measurement limits are documented in
+[BYPASS_CHARGING.md](Documentation/evonix/BYPASS_CHARGING.md).
+Charging policy restoration is a userspace responsibility.
 
-This repository is the `common/` project inside an Android kernel `repo`
-workspace. A standalone clone does not contain Kleaf, the prebuilts, or the
-other projects needed for a complete build.
+## Security and testing
 
-After preparing the workspace as described in
-[Documentation/evonix/BUILDING.md](Documentation/evonix/BUILDING.md), build the
-arm64 distribution from the workspace root:
+The four release branches enforce SELinux. Inherited vendor-module
+version-check relaxation remains a security and compatibility limitation;
+see [SECURITY.md](SECURITY.md). Baseband-guard does not eliminate all
+possible privileged partition-write paths.
 
-```bash
-tools/bazel run --config=fast //common:kernel_aarch64_dist -- \
-  --dist_dir="$PWD/out/evonix"
-```
+A successful compile is not a guarantee of ROM compatibility, better FPS,
+lower temperature or lower battery consumption. Keep a known-good boot image
+and a recovery path before flashing.
 
-The distribution includes `Image`, compressed images, boot images, GKI modules,
-headers, symbol data, and `kernel_sbom.spdx.json`.
-
-## Branches and milestones
-
-Published development lines are intentionally preserved. `main` follows the
-latest BBRv3 line, while feature branches and milestone tags retain build- and
-device-tested checkpoints. See
-[Documentation/evonix/BRANCHES.md](Documentation/evonix/BRANCHES.md) before
-starting work from a historical branch.
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a change. Patches should
-be narrowly scoped, signed off, checked with `scripts/checkpatch.pl`, and
-validated with the relevant Kleaf target. Generated files, flashable packages,
-private keys, and local build logs do not belong in source control.
-
-## Disclaimer
-
-Flashing a custom kernel can prevent a device from booting and can cause data
-loss. Keep a known-good boot image and a recovery path. You are responsible for
-device-specific verification and compliance with the licenses of any bundled or
-redistributed components.
+See [architecture](Documentation/evonix/ARCHITECTURE.md),
+[branches](Documentation/evonix/BRANCHES.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+The kernel is GPL-2.0 licensed; see [COPYING](COPYING).

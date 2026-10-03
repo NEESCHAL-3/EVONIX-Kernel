@@ -1,80 +1,54 @@
-# Building EVONIX
+# Building EVONIX V4.0
 
-EVONIX uses the Android Common Kernel Kleaf workspace. The GitHub repository is
-the `common/` project; its sibling build rules, tools, and prebuilts come from the
-AOSP kernel manifest.
+## Workspace
 
-## Requirements
-
-- A 64-bit Linux host with Git, Python 3, `repo`, and standard build utilities.
-- At least 30 GiB of free disk space; more is recommended for multiple outputs.
-- Network access to Android Googlesource and GitHub for the initial sync.
-- An unlocked test device, a known-good boot image, and a recovery method for
-  device validation.
-
-Kleaf uses the toolchains pinned by the manifest. Do not replace them with a
-host compiler unless a change explicitly requires that experiment.
-
-## Prepare the workspace
+Use a 64-bit Linux host with Git, Python 3, repo and standard Android kernel
+build dependencies. Allow substantial disk space for the manifest and outputs.
 
 ```bash
 mkdir evonix-workspace
 cd evonix-workspace
-
-repo init \
-  -u https://android.googlesource.com/kernel/manifest \
-  -b common-android15-6.6-lts
-repo sync -c -j"$(nproc)"
-
+repo init -u https://android.googlesource.com/kernel/manifest -b common-android15-6.6-lts
+repo sync -c -j8
 cd common
-git remote add evonix https://github.com/NEESCHAL-3/EVONIX-kernel.git
-git fetch evonix main
-git switch -C main --track evonix/main
+git remote add evonix https://github.com/NEESCHAL-3/EVONIX-Kernel.git
+git fetch evonix hyperos/ksu-susfs
+git switch -c evonix-hyperos-ksu --track evonix/hyperos/ksu-susfs
+git submodule update --init KernelSU-Next
 cd ..
 ```
 
-If the `evonix` remote already exists, update its URL with `git remote set-url`
-instead of adding it again. To inspect a preserved line, fetch and switch to the
-specific branch named in `BRANCHES.md`.
+Choose the matching branch from [BRANCHES.md](BRANCHES.md) instead when needed.
+Use a new local branch name if the example name already exists. For an existing
+remote, use `git remote set-url` instead of adding it again.
 
-## Build the arm64 distribution
+## Toolchain and build
 
-Run this command from the workspace root, not from `common/`:
-
-```bash
-tools/bazel run --config=fast //common:kernel_aarch64_dist -- \
-  --dist_dir="$PWD/out/evonix"
-```
-
-The target applies `common/arch/arm64/configs/evonix.config`. The output
-directory contains the raw and compressed kernels, boot images, modules, header
-archives, symbol lists, KMI check markers, and the SPDX SBOM.
-
-## Verify the result
-
-At minimum, confirm that the expected files exist and record their checksums:
+From `common/`, follow the repository's `setup-clang23.sh` toolchain setup.
+The build requires Android Clang 23.0.1, build 16311247 / r614150, located at
+`prebuilts/clang/host/linux-x86/clang-r614150` in the workspace.
+Do not change `build.config.constants` from r510928: that is the Kleaf
+bootstrap identity, not the selected kernel compiler.
 
 ```bash
-test -s out/evonix/Image
-test -s out/evonix/boot.img
-test -s out/evonix/kernel_sbom.spdx.json
-sha256sum out/evonix/Image out/evonix/boot.img
+cd common
+EVONIX_JOBS=8 bash build-evonix.sh ../out/evonix-v4.0
 ```
 
-For source changes, also run from `common/`:
+The script validates the compiler, ThinLTO, selected defaults and the bundled
+AutoFDO profile before invoking Kleaf. Eight jobs are a starting point,
+not a requirement for every host; reduce this on memory-constrained machines.
 
-```bash
-git diff --check
-scripts/checkpatch.pl --strict --codespell --git origin/main..HEAD
-```
+## Verify
 
-Kleaf can emit benign duplicate-type-ID warnings while generating ABI data. A
-build is successful only when Bazel exits with status zero and the distribution
-step completes.
+Require a zero exit status and completed distribution step. Inspect the
+embedded kernel configuration, release identity, KMI results and output checksums.
+Confirm SELinux enforcement configuration, the correct KSU/Normal selection,
+and absence of accidental permissive options. Keep generated artifacts outside Git.
 
-## Device validation
+The distribution includes kernel images, symbols, ABI data and SBOM outputs.
+A boot-only release ZIP does not install rebuilt vendor or ZRAM modules.
 
-Do not flash an unverified image without a recovery path. Record the device ROM,
-boot slot, commit, build command, image checksum, and observed runtime behavior.
-Networking, thermal, charging, storage, scheduler, and compatibility changes
-need targeted runtime checks in addition to a successful compile.
+Before device testing, retain a known-good boot image and recovery path.
+Record ROM, slot, branch commit, Image checksum and actual runtime results.
+Successful compilation alone is not proof of compatibility or performance gains.
