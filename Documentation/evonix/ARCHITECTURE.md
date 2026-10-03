@@ -1,58 +1,43 @@
-# EVONIX architecture
+# EVONIX V4.0 architecture
 
-EVONIX layers device-oriented policy and compatibility work on the Android 15
-Linux 6.6 common kernel. The code remains a monolithic GKI build: EVONIX
-components are built into the arm64 kernel through the EVONIX config fragment
-and the kernel Makefiles.
+EVONIX layers Rodin-specific build tuning and ROM compatibility on Android 15
+Linux 6.6.142. The four enforcing release branches share the same tuning and
+OEM charge-pause backend; ColorOS-specific interfaces remain in ColorOS branches.
 
-## Source map
+## Implementation map
 
-| Area | Primary paths | Responsibility |
+| Area | Paths | Role |
 | --- | --- | --- |
-| Build configuration | `arch/arm64/configs/evonix.config`, `BUILD.bazel` | Applies EVONIX networking, storage, branding, and vendor-module options to `kernel_aarch64`. |
-| Rodin controller | `drivers/misc/evonix_rodin/` | Workload state, input events, CPU QoS, load detection, charging interaction, and thermal policy. |
-| ColorOS compatibility | `drivers/misc/evonix_cos/` | Power, display, storage, scheduler, AFS, QoS, and procfs interfaces expected by ColorOS userspace. |
-| Storage | `block/`, `drivers/ufs/core/`, `fs/f2fs/` | Kyber selection, UFS telemetry/control compatibility, and F2FS ownership behavior. |
-| Networking | `net/ipv4/`, `include/net/`, `include/uapi/linux/` | BBRv3 backport, pacing signals, diagnostics, and FQ defaults. |
-| Vendor modules | `kernel/module/` | Allows target vendor modules across the intended GKI version boundary. |
-| Branding | `Makefile`, `scripts/mkcompile_h`, `scripts/setlocalversion` | EVONIX release name and build identity. |
+| Build tuning | `arch/arm64/Kconfig`, `arch/arm64/Makefile`, `arch/arm64/configs/evonix.config` | Cortex-A725 scheduling, ThinLTO, AutoFDO and release defaults |
+| Scheduler | `kernel/sched/fair.c` | Rodin base slice; existing EEVDF and frequency governors retained |
+| OEM charge pause | `drivers/misc/evonix_oem_bypass.c`, `fs/sysfs/evonix_supply.c` | Stock navigation charge-pause requests and observed diagnostics |
+| ColorOS compatibility | `drivers/misc/evonix_cos/` | Vendor-facing power, display and other compatibility interfaces |
+| Networking | `net/ipv4/` | Existing BBRv3/FQ integration |
+| Partition-write filtering | `security/baseband-guard/` | LSM credential ancestry and covered block-write filtering |
+| Vendor modules | `kernel/module/` | Inherited module-version relaxation; see security limitations |
 
-## Rodin controller
+The older `drivers/misc/evonix_rodin/` controller is not enabled in these
+release branches. Its source presence does not imply active CPU, thermal or
+charging policy. Kyber is available; userspace and individual queues determine
+the active I/O scheduler.
 
-`evonix_rodin_core.c` owns the shared state and `/proc/evonix_rodin` root.
-Input events and workload sampling feed the controller; the QoS and thermal
-components apply policy and expose read-only diagnostic views. Keep policy
-decisions in their owning component rather than duplicating state transitions
-across proc handlers.
+## Runtime boundaries
 
-## ColorOS compatibility
+Eligible power-efficient workqueues can consolidate work; ordinary and
+latency-sensitive queues retain their policy. Lazy RCU batches ordinary
+callbacks while urgent paths remain available. Deferrable KFENCE avoids waking
+an idle CPU solely for a sampling timer.
 
-The compatibility layer supplies the interfaces expected by vendor userspace
-while attempting to use real kernel, power-supply, UFS, scheduler, and storage
-state. These paths form an ABI even when they are not upstream Linux APIs.
-Changing a name, mode, unit, or write behavior therefore requires ROM-level
-testing and documentation.
+The kernel does not restore app preferences or replace ROM charging policy
+with an independent polling controller. Userspace explicitly requests OEM
+charge pause and restores saved choices. Read
+[BYPASS_CHARGING.md](BYPASS_CHARGING.md) for ownership, unsupported cases
+and measurement limits.
 
-Several compatibility nodes use broad Android-facing permissions. Treat every
-write handler as an input-validation and privilege-boundary review point.
+Baseband-guard uses its own standard LSM credential blob and policy-generation
+aware SELinux SID cache. It avoids stale global block-device identity caching.
+It is not blanket protection against all privileged storage access.
 
-## Networking and storage defaults
-
-The EVONIX fragment enables BBR as the default TCP congestion controller and FQ
-as the default qdisc. The BBRv3 port also changes supporting TCP headers, rate
-sampling, timers, diagnostics, and output paths; it must be reviewed and tested
-as one coordinated subsystem change.
-
-Kyber is available for multi-queue block devices, and EVONIX policy prefers it
-for physical UFS queues. Storage changes require latency, throughput, suspend,
-and data-integrity testing—not benchmark results alone.
-
-## Security-sensitive compatibility choices
-
-The current maintained lineage forces SELinux permissive and accepts module
-version mismatches. These are explicit compatibility decisions, not hidden
-defaults. Any future hardened line should make the policy selectable, restore
-stock enforcement and module validation, and validate vendor compatibility as a
-separate deliverable.
-
-See [SECURITY.md](../../SECURITY.md) for reporting and support policy.
+Stock thermal protection remains. No claim of higher FPS, lower idle drain,
+lower temperature or universal vendor-module ABI compatibility follows from
+these configuration choices. See [SECURITY.md](../../SECURITY.md).
