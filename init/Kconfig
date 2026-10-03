@@ -1415,6 +1415,18 @@ config CC_OPTIMIZE_FOR_PERFORMANCE
 	  with the "-O2" compiler flag for best performance and most
 	  helpful compile-time warnings.
 
+config CC_OPTIMIZE_FOR_PERFORMANCE_O3
+	bool "Evaluate aggressive performance optimization (-O3)"
+	depends on ARM64 && CC_IS_CLANG
+	help
+	  Build C code with Clang -O3 and use the matching Clang LTO
+	  optimization level. This allows additional compiler transformations
+	  without changing CPU frequencies or runtime power policy.
+
+	  Larger code can hurt instruction-cache locality; faster execution is
+	  not guaranteed. Compare real workloads before enabling in a release.
+	  The generic default remains -O2. If unsure, choose -O2.
+
 config CC_OPTIMIZE_FOR_SIZE
 	bool "Optimize for size (-Os)"
 	help

@@ -144,6 +144,12 @@ static ssize_t bypass_charging_active_show(struct device *dev,
 
 	mutex_lock(&evx_state_lock);
 	ret = evx_read_int(EVX_SMART, &state);
+	/* Inactive bypass needs no charge-pump, USB or battery-current I/O.
+	 * Preserve the same inactive result and reset the evidence window;
+	 * do not cache measurements once the owned navigation pause is on.
+	 */
+	if (ret || !evx_owned || !(state & EVX_NAV))
+		goto inactive;
 	if (!ret)
 		ret = evx_read_int(EVX_USB "cp_sm_run_state", &cp);
 	if (!ret)
@@ -152,6 +158,8 @@ static ssize_t bypass_charging_active_show(struct device *dev,
 		ret = evx_read_int(EVX_USB "input_suspend", &suspended);
 	if (!ret)
 		ret = evx_read_int(EVX_USB "pmic_vbus", &vbus);
+	if (ret || cp || !online || suspended || vbus < 4400 || vbus > 6000)
+		goto inactive;
 	bms = power_supply_get_by_name("bms");
 	if (!ret)
 		ret = bms ? power_supply_get_property(bms,
@@ -174,6 +182,11 @@ static ssize_t bypass_charging_active_show(struct device *dev,
 	} else {
 		evx_neutral_since = 0;
 	}
+	goto out;
+inactive:
+	evx_neutral_since = 0;
+	evx_last_sample = jiffies;
+out:
 	mutex_unlock(&evx_state_lock);
 	return sysfs_emit(buf, "%d\n", neutral);
 }
