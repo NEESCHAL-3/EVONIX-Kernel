@@ -11,3 +11,26 @@ config OPLUS_FEATURE_SIGKILL_DIAGNOSIS
         help
           Record SIGKILL reason information for OPlus userspace
           diagnostics.
+config PROCESS_RECLAIM_ENHANCE
+        bool "OPlus process reclaim enhance"
+        depends on PROC_FS
+        default n
+        help
+          Provide the native OPlus per-process reclaim interface.
+
+config COSTLY_ALLOC_MASK_RECLAIM
+        bool
+        default n
+
+config OPLUS_FEATURE_KSWAPD_OPT
+        bool "OPlus kswapd optimization"
+        default n
+        select COSTLY_ALLOC_MASK_RECLAIM
+        help
+          Enable native OPlus kswapd and costly allocation optimizations.
+
+config OPLUS_FEATURE_PROACTIVE_COMPACT
+        bool "OPlus proactive compaction"
+        default n
+        help
+          Provide the native OPlus fragmentation/proactive compaction interface.
