@@ -10,6 +10,15 @@ config OPLUS_FEATURE_SCHED_ASSIST
           MT6899 Linux 6.6 OPlus kernel source.
 
 
+
+config EVONIX_OPLUS_SA_COMMON_HOOKS
+        bool "EVONIX common scheduler hook bridge"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Register enqueue/dequeue vendor hooks directly from the
+          common kernel when MediaTek scheduler.ko glue is not used.
+
 config LOCKING_PROTECT
         bool "OPlus SchedAssist locking protection"
         depends on OPLUS_FEATURE_SCHED_ASSIST
