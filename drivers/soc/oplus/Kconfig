@@ -61,3 +61,4 @@ config EVONIX_OPLUS_PHOENIX_RECOVERY
           Keep disabled during compatibility testing.
 
 endmenu
+source "drivers/soc/oplus/device_info/Kconfig"
