@@ -263,6 +263,7 @@ extern int global_silver_perf_core;
 extern int global_sched_group_enabled;
 
 struct rq;
+struct oplus_rq *evonix_get_oplus_rq(struct rq *rq);
 
 #ifdef CONFIG_LOCKING_PROTECT
 struct sched_assist_locking_ops {
@@ -359,7 +360,7 @@ extern android_rvh_schedule_handler_t fbg_android_rvh_schedule_callback;
 extern struct kmem_cache *oplus_task_struct_cachep;
 
 #define ots_to_ts(ots)	(ots->task)
-#define OTS_IDX			0
+#define OTS_IDX			2
 
 static inline struct oplus_task_struct *get_oplus_task_struct(struct task_struct *t)
 {

@@ -190,6 +190,21 @@ bool is_heavy_load_top_task(struct task_struct *p)
 
 struct ux_sched_cputopo ux_sched_cputopo;
 
+/*
+ * EVONIX cross-OEM storage:
+ * Do not share rq->android_oem_data1 with Xiaomi/MTK scheduler modules.
+ */
+static struct oplus_rq evonix_oplus_rq_data[NR_CPUS];
+
+struct oplus_rq *evonix_get_oplus_rq(struct rq *rq)
+{
+        if (!rq)
+                return NULL;
+
+        return &evonix_oplus_rq_data[cpu_of(rq)];
+}
+
+
 static inline void sched_init_ux_cputopo(void)
 {
 	int i = 0;
@@ -513,7 +528,7 @@ void oplus_set_ux_state_lock(struct task_struct *t, int ux_state, int inherit_ty
 #endif
 
 set:
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	/* BUG 6523080
 	* 1. task T is migrating from rq1 -> rq2
 	* 2. set task T ux state to 0 without locking rq1
@@ -702,7 +717,7 @@ void ux_priority_systrace_c(unsigned int cpu, struct task_struct *t)
 	}
 
 	rq = cpu_rq(cpu);
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	value = orq->min_vruntime;
 	if (per_cpu(prev_min_vruntime, cpu) != value) {
 		char buf[256];
@@ -850,7 +865,7 @@ void sched_assist_init_oplus_rq(void)
 			ux_err("failed to init oplus rq(%d)", cpu);
 			continue;
 		}
-		orq = (struct oplus_rq *) rq->android_oem_data1;
+		orq = evonix_get_oplus_rq(rq);
 		orq->ux_list = RB_ROOT_CACHED;
 		orq->exec_timeline = RB_ROOT_CACHED;
 		orq->ux_list_lock = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
@@ -1061,7 +1076,7 @@ bool is_multiple_ux(struct oplus_task_struct *ots)
 
 /*s64 __maybe_unused account_ux_runtime(struct rq *rq, struct task_struct *curr)
 {
-	struct oplus_rq *orq = (struct oplus_rq *) rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	struct oplus_task_struct *ots = get_oplus_task_struct(curr);
 	s64 delta;
 	unsigned int limit;
@@ -1126,7 +1141,7 @@ static void enqueue_ux_thread(struct rq *rq, struct task_struct *p)
 	if (!test_task_is_fair(p) || !oplus_rbnode_empty(&ots->ux_entry))
 		return;
 
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	spin_lock_irqsave(orq->ux_list_lock, irqflag);
 	smp_mb__after_spinlock();
 	if (!oplus_rbnode_empty(&ots->ux_entry)) {
@@ -1169,7 +1184,7 @@ static void dequeue_ux_thread(struct rq *rq, struct task_struct *p)
 	if (IS_ERR_OR_NULL(ots))
 		return;
 
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	spin_lock_irqsave(orq->ux_list_lock, irqflag);
 	smp_mb__after_spinlock();
 	if (!oplus_rbnode_empty(&ots->ux_entry)) {
@@ -1438,7 +1453,7 @@ void adjust_rt_lowest_mask(struct task_struct *p, struct cpumask *local_cpu_mask
 
 		/* unlocked access */
 		rq = cpu_rq(drop_cpu);
-		orq = (struct oplus_rq *) rq->android_oem_data1;
+		orq = evonix_get_oplus_rq(rq);
 		task = rcu_dereference(rq->curr);
 
 		if (!task || (task->flags & PF_EXITING)) {
@@ -1571,7 +1586,7 @@ EXPORT_SYMBOL(adjust_rt_lowest_mask);
 bool sa_skip_rt_sync(struct rq *rq, struct task_struct *p, bool *sync)
 {
 	int cpu = cpu_of(rq);
-	struct oplus_rq *orq = (struct oplus_rq *) rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	struct oplus_task_struct *ots;
 	unsigned long irqflag;
 
@@ -1602,7 +1617,7 @@ bool sa_rt_skip_ux_cpu(int cpu)
 	struct task_struct *curr;
 
 	rq = cpu_rq(cpu);
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	curr = rq->curr;
 
 	/* skip running ux */

@@ -222,7 +222,7 @@ bool should_ux_task_skip_cpu(struct task_struct *task, unsigned int dst_cpu)
 		if (test_bit(IM_FLAG_CAMERA_HAL, &im_flag))
 			return false;
 
-		orq = (struct oplus_rq *) cpu_rq(dst_cpu)->android_oem_data1;
+		orq = evonix_get_oplus_rq(cpu_rq(dst_cpu));
 		if (orq_has_ux_tasks(orq)) {
 			reason = 2;
 			goto skip;
@@ -264,7 +264,7 @@ int get_topology_cluster_id(int cpu)
 static inline bool select_target_cpu_fastpath(struct task_struct *task, int target_cpu)
 {
 	struct rq *orig_rq = cpu_rq(target_cpu);
-	struct oplus_rq *orig_orq = (struct oplus_rq *)orig_rq->android_oem_data1;
+	struct oplus_rq *orig_orq = evonix_get_oplus_rq(orig_rq);
 
 	if (test_task_ux(orig_rq->curr))
 		return false;
@@ -475,7 +475,7 @@ retry:
 
 	for_each_cpu(cpu, &search_cpus) {
 		rq = cpu_rq(cpu);
-		orq = (struct oplus_rq *)rq->android_oem_data1;
+		orq = evonix_get_oplus_rq(rq);
 
 		/* fit status to check if taks util fits cpu capacity */
 		if (cls_nr == 0 && (!task_fits_max(task, cpu) || ux_cls_boost))
@@ -630,7 +630,7 @@ EXPORT_SYMBOL(should_ux_task_skip_eas);
 extern void set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se);
 void oplus_replace_next_task_fair(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick, bool simple)
 {
-	struct oplus_rq *orq = (struct oplus_rq *) rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	struct rb_node *node;
 	unsigned long irqflag;
 
@@ -734,7 +734,7 @@ void resched_timer_init(void)
 
 	for_each_possible_cpu(i) {
 		rq = cpu_rq(i);
-		orq = (struct oplus_rq *) rq->android_oem_data1;
+		orq = evonix_get_oplus_rq(rq);
 		orq->cpu = i;
 		hrtimer_init(orq->resched_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		orq->resched_timer->function = &no_preempt_resched;
@@ -809,7 +809,7 @@ inline void oplus_check_preempt_wakeup(struct rq *rq, struct task_struct *p, boo
 	}
 
 	/* both of wake_task and curr_task are ux */
-	orq = (struct oplus_rq *) rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	spin_lock_irqsave(orq->ux_list_lock, irqflag);
 	smp_mb__after_spinlock();
 	if (!IS_ERR_OR_NULL(ots) && !oplus_rbnode_empty(&ots->ux_entry)) {
