@@ -33,3 +33,5 @@ source "drivers/soc/versatile/Kconfig"
 source "drivers/soc/xilinx/Kconfig"
 
 endmenu
+
+source "drivers/soc/oplus/Kconfig"
