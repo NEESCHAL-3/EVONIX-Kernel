@@ -960,12 +960,15 @@ static int __init evx_cos_perf_compat_init(void)
 				    proc_oplus_binder_dir,
 				    &oplus_binder_ux_flag_proc_ops);
 
-	proc_oplus_version_dir = proc_mkdir("oplusVersion", NULL);
-	if (proc_oplus_version_dir)
-		proc_oplus_eng_version =
-			proc_create("engVersion", 0666,
-				    proc_oplus_version_dir,
-				    &oplus_eng_version_proc_ops);
+	/* Native OPlus projectinfo owns /proc/oplusVersion when enabled. */
+	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_OPROJECT)) {
+		proc_oplus_version_dir = proc_mkdir("oplusVersion", NULL);
+		if (proc_oplus_version_dir)
+			proc_oplus_eng_version =
+				proc_create("engVersion", 0666,
+					    proc_oplus_version_dir,
+					    &oplus_eng_version_proc_ops);
+	}
 
 	/* Native SchedAssist owns /proc/oplus_scheduler when enabled. */
 	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)) {

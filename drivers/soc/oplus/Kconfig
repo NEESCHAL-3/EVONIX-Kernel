@@ -27,4 +27,13 @@ config LOCKING_PROTECT
           Enable locking protection required by native
           MT6899 OPlus SchedAssist.
 
+
+config OPLUS_FEATURE_OPROJECT
+        bool "OPlus project/OCDT information"
+        default n
+        help
+          Build the native OPlus MTK project information driver.
+          On non-OPlus device trees EVONIX may provide a hardware-ID
+          compatibility fallback.
+
 endmenu
