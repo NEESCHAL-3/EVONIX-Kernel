@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+menu "OPlus drivers"
+
+config OPLUS_FEATURE_SCHED_ASSIST
+        bool "OPlus SchedAssist"
+        default n
+        help
+          Enable native OPlus SchedAssist imported from the
+          MT6899 Linux 6.6 OPlus kernel source.
+
+
+config LOCKING_PROTECT
+        bool "OPlus SchedAssist locking protection"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Enable locking protection required by native
+          MT6899 OPlus SchedAssist.
+
+endmenu
