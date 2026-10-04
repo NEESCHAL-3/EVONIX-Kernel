@@ -1323,7 +1323,7 @@ int find_cpu_in_migration(struct task_struct *p,
 		for_each_cpu(cpu, &search_cpus) {
 			rq = cpu_rq(cpu);
 			curr = rq->curr;
-			orq = (struct oplus_rq *) rq->android_oem_data1;
+			orq = evonix_get_oplus_rq(rq);
 
 #ifdef DEBUG_LB_TICK
 			trace_printk("OPLUS_LB_TICK[%d]: cpu=%d, curr=%s$%d$%d, "
@@ -1408,7 +1408,7 @@ int oplus_kick_active_balance(struct rq *rq,
 {
 	unsigned long flags;
 	bool ret = false;
-	struct oplus_rq *orq = (struct oplus_rq *) rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 
 	/* Invoke active balance to force migrate currently running task */
 	raw_spin_lock_irqsave(&rq->__lock, flags);
@@ -1439,7 +1439,7 @@ int oplus_kick_active_balance(struct rq *rq,
 static struct task_struct *oplus_detach_running_task(struct lb_env *env)
 {
 	struct task_struct *p;
-	struct oplus_rq *orq = (struct oplus_rq *) env->src_rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(env->src_rq);
 	pid_t pid = orq->lb.pid;
 
 #ifdef DEBUG_LB_TEST
@@ -1490,7 +1490,7 @@ static int oplus_active_load_balance_cpu_stop(void *data)
 	struct sched_domain *sd;
 	struct task_struct *p = NULL;
 	struct rq_flags rf;
-	struct oplus_rq *orq = (struct oplus_rq *) busiest_rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(busiest_rq);
 
 	rq_lock_irq(busiest_rq, &rf);
 
@@ -1631,7 +1631,7 @@ static struct task_struct *oplus_detach_running_task_for_rt(struct lb_env *env)
 {
 	struct rq *rq = env->src_rq;
 	struct plist_head *head = &rq->rt.pushable_tasks;
-	struct oplus_rq *orq = (struct oplus_rq *) rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	pid_t pid = orq->lb.pid;
 	struct task_struct *p;
 
@@ -1698,7 +1698,7 @@ static int oplus_active_load_balance_cpu_stop_for_rt(void *data)
 	struct sched_domain *sd;
 	struct task_struct *p = NULL;
 	struct rq_flags rf;
-	struct oplus_rq *orq = (struct oplus_rq *) busiest_rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(busiest_rq);
 #ifdef DEBUG_LB_RT_TICK
 	struct task_struct *task = NULL;
 #endif
@@ -1916,7 +1916,7 @@ static struct task_struct *oplus_pick_runnable_ux(
 	struct task_struct *task = NULL;
 	struct oplus_task_struct *ots = NULL;
 	struct rq *src_rq = cpu_rq(src_cpu);
-	struct oplus_rq *orq = (struct oplus_rq *) src_rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(src_rq);
 	u64 runnable_time, threshold_time = ULLONG_MAX;
 	unsigned long irqflag;
 	struct rb_node *node;
@@ -2309,7 +2309,7 @@ static noinline bool oplus_tickpull_runnable_rt(void *data,
 			struct rq *rq, bool rt_boost)
 {
 	struct task_struct *curr = rq->curr;
-	struct oplus_rq *orq = (struct oplus_rq *)rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	int this_cpu = cpu_of(rq);
 	int cur_cls = topology_cluster_id(this_cpu);
 	int order_idx = -1, walk_cnt = -1, idx = -1;
@@ -2364,7 +2364,7 @@ static noinline bool oplus_tickpull_runnable_rt(void *data,
 
 		for_each_cpu(iter_cpu, &search_cpus) {
 			iter_rq = cpu_rq(iter_cpu);
-			iter_orq = (struct oplus_rq *) iter_rq->android_oem_data1;
+			iter_orq = evonix_get_oplus_rq(iter_rq);
 
 			/*
 			 * Cannot migrate to itself.
@@ -2449,7 +2449,7 @@ static noinline bool oplus_tickpull_runnable_rt(void *data,
 static noinline bool oplus_tickpull_running_ux(void *data, struct rq *rq)
 {
 	struct task_struct *curr = rq->curr;
-	struct oplus_rq *orq = (struct oplus_rq *)rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	int this_cpu = cpu_of(rq);
 	int cur_cls = topology_cluster_id(this_cpu);
 	int order_idx = -1, walk_cnt = -1, idx = -1;
@@ -2509,7 +2509,7 @@ static noinline bool oplus_tickpull_running_ux(void *data, struct rq *rq)
 
 		for_each_cpu(iter_cpu, &search_cpus) {
 			iter_rq = cpu_rq(iter_cpu);
-			iter_orq = (struct oplus_rq *) iter_rq->android_oem_data1;
+			iter_orq = evonix_get_oplus_rq(iter_rq);
 
 			/*
 			 * Cannot migrate to itself.
@@ -2600,7 +2600,7 @@ static noinline bool oplus_tickpull_running_ux(void *data, struct rq *rq)
 static noinline bool oplus_tickpull_runnable_ux(void *data, struct rq *rq)
 {
 	struct task_struct *curr = rq->curr;
-	struct oplus_rq *orq = (struct oplus_rq *)rq->android_oem_data1;
+	struct oplus_rq *orq = evonix_get_oplus_rq(rq);
 	int this_cpu = cpu_of(rq);
 	int cur_cls = topology_cluster_id(this_cpu);
 	int order_idx = -1, walk_cnt = -1, idx = -1;
@@ -2653,7 +2653,7 @@ static noinline bool oplus_tickpull_runnable_ux(void *data, struct rq *rq)
 
 		for_each_cpu(iter_cpu, &search_cpus) {
 			iter_rq = cpu_rq(iter_cpu);
-			iter_orq = (struct oplus_rq *) iter_rq->android_oem_data1;
+			iter_orq = evonix_get_oplus_rq(iter_rq);
 
 			/*
 			 * Cannot migrate to itself.
@@ -3334,7 +3334,7 @@ static bool oplus_newidle_balance_pull_runnable_ux(
 
 		for_each_cpu(cpu, &search_cpus) {
 			rq = cpu_rq(cpu);
-			orq = (struct oplus_rq *) rq->android_oem_data1;
+			orq = evonix_get_oplus_rq(rq);
 
 			/*
 			 * Cannot migrate to itself.

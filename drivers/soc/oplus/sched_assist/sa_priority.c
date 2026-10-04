@@ -701,7 +701,7 @@ void android_vh_sched_stat_runtime_handler(void *unused, struct task_struct *tas
 #endif
 
 	rq = task_rq(task);
-	orq = (struct oplus_rq *)rq->android_oem_data1;
+	orq = evonix_get_oplus_rq(rq);
 	ots = get_oplus_task_struct(task);
 	if (IS_ERR_OR_NULL(ots)) {
 		return;
