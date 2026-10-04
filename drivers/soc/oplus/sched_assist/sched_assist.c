@@ -112,7 +112,7 @@ static int register_scheduler_vendor_hooks(void)
 	REGISTER_TRACE_RVH(android_rvh_schedule, android_rvh_schedule_handler);
 #endif
 	REGISTER_TRACE_RVH(android_vh_scheduler_tick, android_vh_scheduler_tick_handler);
-#ifdef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
+#if defined(CONFIG_OPLUS_SYSTEM_KERNEL_QCOM) || defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_after_enqueue_task, android_rvh_after_enqueue_task_handler);
 	REGISTER_TRACE_RVH(android_rvh_dequeue_task, android_rvh_dequeue_task_handler);
 #endif
