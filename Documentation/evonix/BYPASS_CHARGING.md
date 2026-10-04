@@ -66,6 +66,98 @@ the new writable request attributes still require privileged backend access.
 An incompatible vendor charger implementation is not made compatible merely
 by choosing a different ROM or seeing a support flag.
 
+### Source structure and build placement
+
+```text
+drivers/misc/Makefile
+  -> evonix_oem_bypass.o          request, ownership, sysfs and observations
+include/linux/evonix_oem_bypass.h
+  -> built-in accessor declarations
+fs/sysfs/Makefile
+  -> evonix_supply.o              guarded calls to existing OEM attributes
+stock vendor charger manager
+  -> smart_chg navigation slot    battery charge-pause policy
+```
+
+Both objects are built into the kernel Image with `obj-y`. The header declares
+`evonix_oem_supply_read()` and `evonix_oem_navigation_set()`; it does not export
+a replacement charger-module API. This is why the backend ships in the kernel
+ZIP without replacing the vendor charger modules, vendor_boot or recovery.
+The retired private-layout bypass experiments are not the compiled backend.
+
+Registration is limited to the `mediatek,MT6899` machine. A delayed work item
+waits for the `battery` power supply, retrying at two-second intervals up to
+60 times, then attaches the attribute group to that device. Missing or
+incompatible OEM attributes are reported instead of emulating bypass.
+
+### Enable and disable sequence
+
+1. A privileged service writes a boolean to `battery/bypass_charging` (or its
+   `bypass_charge` alias). The command mutex serializes requests.
+2. The apply worker reads `battery/smart_chg`. If another owner already has
+   navigation limiting enabled, a new EVONIX enable returns `EBUSY` rather than
+   replacing an unreadable OEM threshold.
+3. The built-in accessor submits only the navigation command: `3\n` to enable
+   the navigation slot with threshold zero, or `2\n` to disable it. These are
+   packed **OEM commands**, not current, voltage or wattage values. Other smart
+   charging slots remain untouched.
+4. The worker reads back `smart_chg` and checks its navigation bit (`BIT(1)`).
+   A failed enable/readback triggers a disable rollback; rollback failure keeps
+   ownership recorded so an outstanding pause can still be released later.
+5. The write waits for the worker to finish and returns the actual command
+   error. The state lock protects ownership and observation state. A successful
+   request resets the evidence window and emits a power-supply change event.
+
+An already owned, enabled navigation request is not rewritten on every status
+read. Disabling an unowned request does not clear somebody else's navigation
+control. The driver has no periodic task repeatedly forcing charger settings.
+
+### Lifetime-safe OEM access
+
+The accessor obtains a power-supply reference, takes a reference to the sysfs
+parent and looks up the requested kernfs node. It holds a kernfs active
+reference while calling the OEM attribute's `show` or `store` callback, then
+releases those references. This protects the callback against concurrent
+device/sysfs removal. It checks node ownership, attribute mode, callback
+availability and returned lengths; read parsing failures propagate as errors.
+
+Writes are fixed to the navigation command, not arbitrary caller-provided
+attribute strings. Reads are restricted to `battery/smart_chg` and USB
+`cp_sm_run_state`, `online`, `input_suspend` and `pmic_vbus`. Battery current
+is read through the `bms` power-supply `CURRENT_NOW` property.
+
+### Request versus observed active state
+
+`bypass_charging=1` means EVONIX owns a navigation pause confirmed by the OEM
+getter. It does not mean the battery has been electrically disconnected.
+`bypass_charging_active=1` requires all of these observations:
+
+- Owned navigation pause still present.
+- USB online, `input_suspend=0`, and `cp_sm_run_state=0`.
+- Primary charger VBUS between 4400 and 6000 mV.
+- BMS battery current between -100000 and +100000 microamps continuously
+  across the three-second confirmation window.
+
+The active flag is a tolerance-based observation, **not an exact 0 mA claim**.
+A failed sample or invalid condition clears confirmation. Read gaps over two
+seconds restart the window; observation does not submit charging commands.
+When bypass is inactive, the driver skips the extra USB/current measurements.
+Diagnostics report `api=3`, `backend=oem-navigation`, ownership and last error.
+
+### Rodin Essential integration responsibilities
+
+The kernel interface accepts on/off; it does not store an app's 20/40/80/90%
+threshold. Rodin Essential's daemon owns the saved user choice, waits until
+the threshold is reached (or uses Immediate), enables the kernel request and
+continues observing independently of the UI. Closing or force-stopping the
+app must not be interpreted as disabling an accepted kernel request.
+
+After reboot the driver starts unowned and off, so the daemon must restore the
+saved policy. It must avoid competing charging-profile writes while bypass
+is selected and distinguish waiting, requested and observed states. A fresh
+page should use daemon/kernel state rather than restart its own verification
+timer. Kernel support is necessary even when the ROM integrates the app natively.
+
 ## Validation scope
 
 On 2026-10-02, the HyperOS KernelSU Next/SUSFS build was compiled with Clang 23,
