@@ -1,0 +1,13 @@
+config DUMP_TASKS_MEM
+        bool "OPlus dump userspace process memory"
+        default n
+        help
+          Dump userspace process memory information through
+          the native OPlus memory monitor interface.
+
+config OPLUS_FEATURE_SIGKILL_DIAGNOSIS
+        bool "OPlus SIGKILL diagnosis"
+        default n
+        help
+          Record SIGKILL reason information for OPlus userspace
+          diagnostics.
