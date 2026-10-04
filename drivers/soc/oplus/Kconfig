@@ -36,4 +36,28 @@ config OPLUS_FEATURE_OPROJECT
           On non-OPlus device trees EVONIX may provide a hardware-ID
           compatibility fallback.
 
+
+config OPLUS_FEATURE_PHOENIX
+        bool "OPlus Phoenix boot monitor"
+        default n
+        help
+          Build the native OPlus Phoenix boot profiling and
+          boot-stage monitoring framework.
+
+config EVONIX_OPLUS_PHOENIX_WATCHDOG
+        bool "Enable OPlus Phoenix HLOS watchdog"
+        depends on OPLUS_FEATURE_PHOENIX
+        default n
+        help
+          Enable active Phoenix boot watchdog recovery.
+          Keep disabled until rodin boot-mode detection is validated.
+
+config EVONIX_OPLUS_PHOENIX_RECOVERY
+        bool "Enable OPlus Phoenix panic recovery"
+        depends on OPLUS_FEATURE_PHOENIX
+        default n
+        help
+          Allow Phoenix hang handling to trigger active recovery.
+          Keep disabled during compatibility testing.
+
 endmenu
