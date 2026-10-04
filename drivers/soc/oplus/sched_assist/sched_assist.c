@@ -31,6 +31,7 @@
 #define HI_MASK		0xFF00000000000000UL
 #define HI_FLAG		0xAB00000000000000UL
 
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 static void set_ux_to_task(struct task_struct *new) {
 	struct pt_regs *childregs = task_pt_regs(new);
 	unsigned long newsp;
@@ -68,6 +69,7 @@ static void set_ux_to_task(struct task_struct *new) {
 static void android_rvh_wake_up_new_task_handler(void *unused, struct task_struct *new) {
 	set_ux_to_task(new);
 }
+#endif
 
 static int register_scheduler_vendor_hooks(void)
 {
@@ -78,7 +80,9 @@ static int register_scheduler_vendor_hooks(void)
 #ifdef OPLUS_UX_EEVDF_COMPATIBLE
 	REGISTER_TRACE_RVH(android_rvh_update_deadline, android_rvh_update_deadline_handler);
 #endif
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_can_migrate_task, android_rvh_can_migrate_task_handler);
+#endif
 #ifndef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
 	/* REGISTER_TRACE_RVH(android_rvh_post_init_entity_util_avg, android_rvh_post_init_entity_util_avg_handler); */
 #endif
@@ -91,9 +95,13 @@ static int register_scheduler_vendor_hooks(void)
 #endif
 
 #ifndef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_check_preempt_wakeup, android_rvh_check_preempt_wakeup_handler);
+#endif
 #ifndef CONFIG_MTK_SCHED_VIP_TASK
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_replace_next_task_fair, android_rvh_replace_next_task_fair_handler);
+#endif
 #endif
 #endif
 
@@ -103,21 +111,27 @@ static int register_scheduler_vendor_hooks(void)
 	/* register vender hook in  kernel/sched/rt.c */
 #ifndef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
 	/* REGISTER_TRACE_RVH(android_rvh_select_task_rq_rt, android_rvh_select_task_rq_rt_handler); */
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_find_lowest_rq, android_rvh_find_lowest_rq_handler);
+#endif
 #endif
 
 	/* register vender hook in kernel/sched/core.c */
 	REGISTER_TRACE_RVH(android_rvh_sched_fork, android_rvh_sched_fork_handler);
 #ifndef CONFIG_MTK_SCHED_FAST_LOAD_TRACKING
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_schedule, android_rvh_schedule_handler);
 #endif
+#endif
 	REGISTER_TRACE_RVH(android_vh_scheduler_tick, android_vh_scheduler_tick_handler);
-#if defined(CONFIG_OPLUS_SYSTEM_KERNEL_QCOM) || defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+#if defined(CONFIG_OPLUS_SYSTEM_KERNEL_QCOM)
 	REGISTER_TRACE_RVH(android_rvh_after_enqueue_task, android_rvh_after_enqueue_task_handler);
 	REGISTER_TRACE_RVH(android_rvh_dequeue_task, android_rvh_dequeue_task_handler);
 #endif
 
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_RVH(android_rvh_set_cpus_allowed_by_task, android_rvh_set_cpus_allowed_by_task_handler);
+#endif
 	REGISTER_TRACE_RVH(android_rvh_setscheduler, android_rvh_setscheduler_handler);
 
 #ifndef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
@@ -133,7 +147,9 @@ static int register_scheduler_vendor_hooks(void)
 
 	REGISTER_TRACE_VH(sched_stat_runtime, android_vh_sched_stat_runtime_handler);
 
+#if !defined(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
 	REGISTER_TRACE_VH(android_rvh_wake_up_new_task, android_rvh_wake_up_new_task_handler);
+#endif
 
 #ifdef CONFIG_BLOCKIO_UX_OPT
 	sa_blockio_init();

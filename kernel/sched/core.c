@@ -84,6 +84,14 @@
 #undef CREATE_TRACE_POINTS
 
 #include "sched.h"
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+extern void android_rvh_after_enqueue_task_handler(void *unused,
+        struct rq *rq, struct task_struct *p, int flags);
+extern void android_rvh_dequeue_task_handler(void *unused,
+        struct rq *rq, struct task_struct *p, int flags);
+#endif
+
 #include "stats.h"
 #include "autogroup.h"
 
@@ -2162,6 +2170,10 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	uclamp_rq_inc(rq, p);
 	trace_android_rvh_enqueue_task(rq, p, flags);
 	p->sched_class->enqueue_task(rq, p, flags);
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+	android_rvh_after_enqueue_task_handler(NULL, rq, p, flags);
+#endif
 	trace_android_rvh_after_enqueue_task(rq, p, flags);
 
 	if (sched_core_enabled(rq))
@@ -2182,6 +2194,10 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	uclamp_rq_dec(rq, p);
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+	android_rvh_dequeue_task_handler(NULL, rq, p, flags);
+#endif
 	trace_android_rvh_dequeue_task(rq, p, flags);
 	p->sched_class->dequeue_task(rq, p, flags);
 	trace_android_rvh_after_dequeue_task(rq, p, flags);
