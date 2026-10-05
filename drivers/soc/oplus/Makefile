@@ -7,3 +7,5 @@ obj-$(CONFIG_OPLUS_DEVICE_IFNO) += device_info/
 obj-$(CONFIG_OPLUS_FEATURE_MIDAS_V2) += midas/
 obj-$(CONFIG_OPLUS_FEATURE_OCH) += cpufreq_health/
 obj-$(CONFIG_OPLUS_FEATURE_FRAME_BOOST) += frame_boost/
+
+obj-$(CONFIG_EVONIX_OPLUS_HEALTHINFO_LITE) += healthinfo_lite/
