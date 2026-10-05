@@ -5,3 +5,4 @@ obj-$(CONFIG_OPLUS_FEATURE_OPROJECT) += projectinfo/
 obj-$(CONFIG_OPLUS_FEATURE_PHOENIX) += phoenix/
 obj-$(CONFIG_OPLUS_DEVICE_IFNO) += device_info/
 obj-$(CONFIG_OPLUS_FEATURE_MIDAS_V2) += midas/
+obj-$(CONFIG_OPLUS_FEATURE_OCH) += cpufreq_health/
