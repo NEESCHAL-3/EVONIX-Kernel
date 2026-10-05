@@ -14,7 +14,7 @@
 #include <include/linux/sched.h>
 #include <linux/cpuidle.h>
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
-#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#include "../frame_boost/frame_group.h"
 #endif
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_VT_CAP)
 #include "../eas_opt/oplus_cap.h"
