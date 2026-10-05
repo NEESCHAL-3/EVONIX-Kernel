@@ -1,0 +1,6 @@
+config OPLUS_FEATURE_MIDAS_V2
+	bool "OPlus MIDAS v2"
+	depends on DUMP_TASKS_MEM
+	default n
+	help
+	  Enable the native OPlus MIDAS v2 framework.

@@ -1,0 +1,1 @@
+obj-$(CONFIG_OPLUS_FEATURE_MIDAS_V2) += v2/
