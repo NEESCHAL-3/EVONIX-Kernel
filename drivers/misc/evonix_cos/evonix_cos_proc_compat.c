@@ -89,8 +89,6 @@ static int __init evx_cos_proc_compat_init(void)
 	evx_proc_touch("oplus_frame_boost/sys_ctrl", 0666, &evx_zero_rw_ops);
 	evx_proc_touch("oplus_frame_boost/ctrl", 0666, &evx_zero_rw_ops);
 
-	/* Some OPlus libs probe /proc/sys/fbg/ as sharedFd base */
-	proc_mkdir("sys/fbg", NULL);
 
 	pr_info("EVONIX-COS: proc compat v30 task_cpustats, healthinfo, schedassist, frameboost ready\n");
 	return 0;
