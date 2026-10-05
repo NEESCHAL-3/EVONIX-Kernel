@@ -129,17 +129,23 @@ static void get_possible_siblings(int cpuid, struct cpumask *cluster_cpus)
 
 static void insert_cluster(struct oplus_sched_cluster *cluster, struct list_head *head)
 {
-	struct oplus_sched_cluster *tmp;
-	struct list_head *iter = head;
+    struct oplus_sched_cluster *tmp;
+    struct list_head *iter = head;
+    int first_cpu = cpumask_first(&cluster->cpus);
 
-	list_for_each_entry(tmp, head, list) {
-		if (arch_scale_cpu_capacity(cpumask_first(&cluster->cpus))
-			< arch_scale_cpu_capacity(cpumask_first(&tmp->cpus)))
-			break;
-		iter = &tmp->list;
-	}
+    /*
+     * EVONIX/rodin:
+     * FrameBoost initializes before final scheduler capacities are ready.
+     * MT6899 CPU numbering is performance ordered:
+     * CPU0-3 little, CPU4-6 middle, CPU7 prime.
+     */
+    list_for_each_entry(tmp, head, list) {
+        if (first_cpu < cpumask_first(&tmp->cpus))
+            break;
+        iter = &tmp->list;
+    }
 
-	list_add(&cluster->list, iter);
+    list_add(&cluster->list, iter);
 }
 
 static void cleanup_clusters(struct list_head *head)
@@ -170,28 +176,13 @@ struct oplus_sched_cluster *fb_cluster[MAX_CLS_NUM];
 
 static inline void add_cluster(const struct cpumask *cpus, struct list_head *head)
 {
-	unsigned long capacity = 0, insert_capacity = 0;
-	struct oplus_sched_cluster *cluster = NULL;
+    struct oplus_sched_cluster *cluster = NULL;
 
-	capacity = arch_scale_cpu_capacity(cpumask_first(cpus));
-	/* If arch_capacity is no different between mid cluster and max cluster,
-	 * just combind them
-	 */
-	list_for_each_entry_rcu(cluster, head, list) {
-		insert_capacity = arch_scale_cpu_capacity(cpumask_first(&cluster->cpus));
-		if (capacity < insert_capacity) {
-			ofb_debug("insert cluster=%*pbl is same as exist cluster=%*pbl\n",
-				cpumask_pr_args(cpus), cpumask_pr_args(&cluster->cpus));
-			break;
-		}
-	}
+    cluster = alloc_new_cluster(cpus);
+    insert_cluster(cluster, head);
 
-	cluster = alloc_new_cluster(cpus);
-	insert_cluster(cluster, head);
-
-	fb_cluster[num_sched_clusters] = cluster;
-
-	num_sched_clusters++;
+    fb_cluster[num_sched_clusters] = cluster;
+    num_sched_clusters++;
 }
 
 static inline void assign_cluster_ids(struct list_head *head)
