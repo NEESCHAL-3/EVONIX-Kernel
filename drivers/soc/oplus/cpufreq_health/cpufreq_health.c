@@ -338,33 +338,32 @@ int freq_to_voltage(int cluster_id, unsigned int target_freq)
 }
 EXPORT_SYMBOL_GPL(freq_to_voltage);
 
-static int freq_table_get_closest_index(struct oplus_cpufreq_health *och, unsigned int target_freq)
+static int freq_table_get_closest_index(struct oplus_cpufreq_health *och,
+                                        unsigned int target_freq)
 {
-	int idx, best = -1;
-	unsigned int freq;
+        int idx;
+        int best = -1;
+        u64 best_delta = U64_MAX;
 
-	for (idx = 0; idx < och->len; idx++) {
-		freq = och->table[idx].frequency;
+        for (idx = 0; idx < och->len; idx++) {
+                unsigned int freq = och->table[idx].frequency;
+                u64 delta;
 
-		if (freq == target_freq)
-			return idx;
+                if (freq == target_freq)
+                        return idx;
 
-		if (freq < target_freq) {
-			best = idx;
-			continue;
-		}
+                if (freq > target_freq)
+                        delta = (u64)freq - target_freq;
+                else
+                        delta = (u64)target_freq - freq;
 
-		/* No freq found below target_freq */
-		if (best == -1)
-			return idx;
+                if (delta < best_delta) {
+                        best_delta = delta;
+                        best = idx;
+                }
+        }
 
-		/* Choose the closest freq */
-		if (target_freq - och->table[best].frequency > freq - target_freq)
-			return idx;
-
-		return best;
-	}
-	return best;
+        return best;
 }
 
 void cpufreq_health_get_state(struct cpufreq_policy *policy)
