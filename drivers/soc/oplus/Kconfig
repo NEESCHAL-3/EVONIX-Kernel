@@ -67,3 +67,5 @@ source "drivers/soc/oplus/cpufreq_health/Kconfig"
 source "drivers/soc/oplus/frame_boost/Kconfig"
 
 source "drivers/soc/oplus/healthinfo_lite/Kconfig"
+
+source "drivers/soc/oplus/waker_identify/Kconfig"

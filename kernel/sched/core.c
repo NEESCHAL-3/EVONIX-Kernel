@@ -105,6 +105,7 @@ extern void android_rvh_dequeue_task_handler(void *unused,
 #include "../smpboot.h"
 
 #include <trace/hooks/sched.h>
+#include <linux/oplus_waker_identify.h>
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
 #include <linux/oplus_frame_boost.h>
 #endif
@@ -4480,6 +4481,9 @@ int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		smp_cond_load_acquire(&p->on_cpu, !VAL);
 
 		trace_android_rvh_try_to_wake_up(p);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_WAKER_IDENTIFY)
+		evonix_waker_identify_try_to_wake_up(p);
+#endif
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
 		evonix_fbg_try_to_wake_up(p);
 #endif

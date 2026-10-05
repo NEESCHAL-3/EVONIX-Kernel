@@ -1,0 +1,11 @@
+config OPLUS_FEATURE_WAKER_IDENTIFY
+	bool "OPlus Waker Identify"
+	default n
+	help
+	  Native OPlus wake relationship tracking.
+
+	  Provides:
+	    /proc/waker_identify/waker_info
+	    /proc/waker_identify/rt_info
+	    /proc/waker_identify/enable
+	    /proc/waker_identify/debug_enable
