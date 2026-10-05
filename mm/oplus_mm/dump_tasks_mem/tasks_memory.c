@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/mm.h>
 #include <linux/version.h>
+#include <linux/memory_monitor.h>
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL)
 extern u64 kgsl_get_stats(pid_t pid);
@@ -34,18 +35,6 @@ static int show_uid_limit = 0;
 static int just_show_one_uid = JUST_IGNORE;
 static int just_show_one_pid = JUST_IGNORE;
 
-struct process_mem {
-	char comm[TASK_COMM_LEN];
-	int pid;
-	int ppid;
-	int oom_score_adj;
-	unsigned long rss;
-	unsigned long rssfile;
-	unsigned long swapents_ori;
-	unsigned int uid;
-	unsigned long gl_dev;
-	unsigned long egl;
-};
 static struct process_mem pmem[1024];
 
 void update_user_tasklist(struct task_struct *tsk)
@@ -148,6 +137,79 @@ static int memory_monitor_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, memory_monitor_show, NULL);
 }
+
+
+void mm_get_all_pmem(int *cnt, struct process_mem *val)
+{
+	struct task_struct *tsk;
+	int record_tasks = 0;
+	int i;
+
+	if (!cnt || !val)
+		return;
+
+	*cnt = 0;
+
+	rcu_read_lock();
+
+	for_each_process(tsk) {
+		if (!tsk->signal)
+			continue;
+
+		if (tsk->flags & PF_KTHREAD)
+			continue;
+
+		task_lock(tsk);
+
+		if (!tsk->mm) {
+			task_unlock(tsk);
+			continue;
+		}
+
+		val[record_tasks].pid = tsk->pid;
+		val[record_tasks].ppid =
+			pid_alive(tsk) ?
+			task_tgid_nr(rcu_dereference(tsk->real_parent)) : 0;
+
+		val[record_tasks].uid = task_uid(tsk).val;
+
+		memcpy(val[record_tasks].comm,
+		       tsk->comm,
+		       TASK_COMM_LEN);
+
+		val[record_tasks].oom_score_adj =
+			tsk->signal->oom_score_adj;
+
+		val[record_tasks].rss =
+			get_mm_rss(tsk->mm) << 2;
+
+#ifdef CONFIG_MMU
+		val[record_tasks].rss +=
+			atomic_long_read(&tsk->mm->pgtables_bytes) >> 10;
+#endif
+
+		val[record_tasks].rssfile =
+			get_mm_counter(tsk->mm, MM_FILEPAGES) << 2;
+
+		val[record_tasks].swapents_ori =
+			get_mm_counter(tsk->mm, MM_SWAPENTS) << 2;
+
+		task_unlock(tsk);
+
+		record_tasks++;
+
+		if (record_tasks >= 1024)
+			break;
+	}
+
+	rcu_read_unlock();
+
+	for (i = 0; i < record_tasks; i++)
+		val[i].gl_dev = get_gpumem_by_pid(val[i].pid);
+
+	*cnt = record_tasks;
+}
+EXPORT_SYMBOL_GPL(mm_get_all_pmem);
 
 static ssize_t memory_monitor_write(struct file *file, const char __user *buff, size_t len, loff_t *ppos)
 {
