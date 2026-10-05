@@ -9,7 +9,7 @@
 
 #include <linux/kernel.h>
 #include "midas_dev.h"
-#include "../../cpufreq_health/cpufreq_health.h"
+#include <linux/cpufreq_health.h>
 
 #define STATE_MAX    60
 #define CPU_MAX      8

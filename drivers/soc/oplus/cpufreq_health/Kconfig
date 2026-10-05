@@ -1,0 +1,7 @@
+config OPLUS_FEATURE_OCH
+	bool "OPlus cpufreq health"
+	depends on CPU_FREQ
+	default n
+	help
+	  Enable native OPlus CPU frequency floor/ceiling health statistics
+	  and expose them to MIDAS v2.
