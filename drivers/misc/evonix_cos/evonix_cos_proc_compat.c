@@ -70,25 +70,25 @@ static int __init evx_cos_proc_compat_init(void)
 	if (healthinfo)
 		proc_create("alloc_wait", 0666, healthinfo, &evx_zero_rw_ops);
 
-	/* OPlus SchedAssist native sharedFd compatibility */
-	proc_mkdir("oplus_scheduler", NULL);
-	proc_mkdir("oplus_scheduler/sched_assist", NULL);
-	proc_mkdir("oplus_scheduler/sched_assist/audio", NULL);
+	/* Use compatibility nodes only when native OPlus SchedAssist is absent. */
+	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)) {
+		proc_mkdir("oplus_scheduler", NULL);
+		proc_mkdir("oplus_scheduler/sched_assist", NULL);
+		proc_mkdir("oplus_scheduler/sched_assist/audio", NULL);
 
-	evx_proc_touch("oplus_scheduler/sched_assist/ux_task",
-		       0666, &evx_zero_rw_ops);
-	evx_proc_touch("oplus_scheduler/sched_assist/ux_task_app",
-		       0666, &evx_zero_rw_ops);
-	evx_proc_touch("oplus_scheduler/sched_assist/audio/status",
-		       0666, &evx_one_rw_ops);
+		evx_proc_touch("oplus_scheduler/sched_assist/ux_task",
+			       0666, &evx_zero_rw_ops);
+		evx_proc_touch("oplus_scheduler/sched_assist/ux_task_app",
+			       0666, &evx_zero_rw_ops);
+		evx_proc_touch("oplus_scheduler/sched_assist/audio/status",
+			       0666, &evx_one_rw_ops);
+	}
 
 	/* OPlus frame boost compatibility */
 	proc_mkdir("oplus_frame_boost", NULL);
 	evx_proc_touch("oplus_frame_boost/sys_ctrl", 0666, &evx_zero_rw_ops);
 	evx_proc_touch("oplus_frame_boost/ctrl", 0666, &evx_zero_rw_ops);
 
-	/* Some OPlus libs probe /proc/sys/fbg/ as sharedFd base */
-	proc_mkdir("sys/fbg", NULL);
 
 	pr_info("EVONIX-COS: proc compat v30 task_cpustats, healthinfo, schedassist, frameboost ready\n");
 	return 0;

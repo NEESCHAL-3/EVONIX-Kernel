@@ -84,6 +84,14 @@
 #undef CREATE_TRACE_POINTS
 
 #include "sched.h"
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+extern void android_rvh_after_enqueue_task_handler(void *unused,
+        struct rq *rq, struct task_struct *p, int flags);
+extern void android_rvh_dequeue_task_handler(void *unused,
+        struct rq *rq, struct task_struct *p, int flags);
+#endif
+
 #include "stats.h"
 #include "autogroup.h"
 
@@ -97,6 +105,10 @@
 #include "../smpboot.h"
 
 #include <trace/hooks/sched.h>
+#include <linux/oplus_waker_identify.h>
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <linux/oplus_frame_boost.h>
+#endif
 #include <trace/hooks/cgroup.h>
 #include <trace/hooks/dtask.h>
 
@@ -2162,6 +2174,10 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	uclamp_rq_inc(rq, p);
 	trace_android_rvh_enqueue_task(rq, p, flags);
 	p->sched_class->enqueue_task(rq, p, flags);
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+	android_rvh_after_enqueue_task_handler(NULL, rq, p, flags);
+#endif
 	trace_android_rvh_after_enqueue_task(rq, p, flags);
 
 	if (sched_core_enabled(rq))
@@ -2182,6 +2198,10 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	uclamp_rq_dec(rq, p);
+
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_SA_COMMON_HOOKS)
+	android_rvh_dequeue_task_handler(NULL, rq, p, flags);
+#endif
 	trace_android_rvh_dequeue_task(rq, p, flags);
 	p->sched_class->dequeue_task(rq, p, flags);
 	trace_android_rvh_after_dequeue_task(rq, p, flags);
@@ -4461,6 +4481,12 @@ int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		smp_cond_load_acquire(&p->on_cpu, !VAL);
 
 		trace_android_rvh_try_to_wake_up(p);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_WAKER_IDENTIFY)
+		evonix_waker_identify_try_to_wake_up(p);
+#endif
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+		evonix_fbg_try_to_wake_up(p);
+#endif
 
 		cpu = select_task_rq(p, p->wake_cpu, wake_flags | WF_TTWU);
 		if (task_cpu(p) != cpu) {
@@ -4867,6 +4893,9 @@ late_initcall(sched_core_sysctl_init);
 int sched_fork(unsigned long clone_flags, struct task_struct *p)
 {
 	trace_android_rvh_sched_fork(p);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	evonix_fbg_sched_fork(p);
+#endif
 
 	__sched_fork(clone_flags, p);
 	/*
@@ -5014,6 +5043,9 @@ void wake_up_new_task(struct task_struct *p)
 	update_rq_clock(rq);
 	post_init_entity_util_avg(p);
 	trace_android_rvh_new_task_stats(p);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	evonix_fbg_new_task_stats(p);
+#endif
 
 	activate_task(rq, p, ENQUEUE_NOCLOCK);
 	trace_sched_wakeup_new(p);
@@ -5432,6 +5464,9 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 			prev->sched_class->task_dead(prev);
 
 		trace_android_rvh_flush_task(prev);
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+		evonix_fbg_flush_task(prev);
+#endif
 
 		/* Task is done with its stack. */
 		put_task_stack(prev);

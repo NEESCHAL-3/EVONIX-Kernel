@@ -1,0 +1,12 @@
+config OPLUS_DEVICE_IFNO
+        bool "OPlus device information"
+        default n
+        help
+          Build the native OPlus device_info framework.
+
+config OPLUS_DEVICE_INFO_MTK_PLATFORM
+        bool "OPlus device info MTK platform"
+        depends on OPLUS_DEVICE_IFNO
+        default n
+        help
+          Use the MediaTek device_info platform implementation.

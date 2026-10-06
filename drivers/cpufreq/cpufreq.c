@@ -16,6 +16,7 @@
 
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
+#include <linux/cpufreq_health.h>
 #include <linux/cpufreq_times.h>
 #include <linux/cpu_cooling.h>
 #include <linux/delay.h>
@@ -1595,6 +1596,16 @@ static int cpufreq_online(unsigned int cpu)
 	if (cpufreq_driver->ready)
 		cpufreq_driver->ready(policy);
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_OCH)
+	if (new_policy) {
+		int och_ret = cpufreq_health_register(policy);
+
+		if (och_ret)
+			pr_err("OCH: failed to register CPU%d policy: %d\n",
+			       policy->cpu, och_ret);
+	}
+#endif
+
 	/* Register cpufreq cooling only for a new policy */
 	if (new_policy && cpufreq_thermal_control_enabled(cpufreq_driver))
 		policy->cdev = of_cpufreq_cooling_register(policy);
@@ -2656,6 +2667,11 @@ static int cpufreq_set_policy(struct cpufreq_policy *policy,
 	policy->max = new_data.max;
 	policy->min = __resolve_freq(policy, policy->min, CPUFREQ_RELATION_L);
 	policy->max = __resolve_freq(policy, policy->max, CPUFREQ_RELATION_H);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_OCH)
+	cpufreq_health_get_state(policy);
+#endif
+
 	trace_cpu_frequency_limits(policy);
 
 	policy->cached_target_freq = UINT_MAX;

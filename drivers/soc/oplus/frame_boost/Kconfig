@@ -1,0 +1,7 @@
+config OPLUS_FEATURE_FRAME_BOOST
+        bool "OPlus Frame Boost Core"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Enable native OPlus Frame Boost core.
+          CFBT and GEAS are intentionally disabled.

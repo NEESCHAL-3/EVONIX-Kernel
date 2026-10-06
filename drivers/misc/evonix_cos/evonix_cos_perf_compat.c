@@ -960,60 +960,66 @@ static int __init evx_cos_perf_compat_init(void)
 				    proc_oplus_binder_dir,
 				    &oplus_binder_ux_flag_proc_ops);
 
-	proc_oplus_version_dir = proc_mkdir("oplusVersion", NULL);
-	if (proc_oplus_version_dir)
-		proc_oplus_eng_version =
-			proc_create("engVersion", 0666,
-				    proc_oplus_version_dir,
-				    &oplus_eng_version_proc_ops);
+	/* Native OPlus projectinfo owns /proc/oplusVersion when enabled. */
+	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_OPROJECT)) {
+		proc_oplus_version_dir = proc_mkdir("oplusVersion", NULL);
+		if (proc_oplus_version_dir)
+			proc_oplus_eng_version =
+				proc_create("engVersion", 0666,
+					    proc_oplus_version_dir,
+					    &oplus_eng_version_proc_ops);
+	}
 
-	proc_oplus_scheduler_dir = proc_mkdir("oplus_scheduler", NULL);
-	if (proc_oplus_scheduler_dir) {
-		proc_oplus_scheduler_qos_enable =
-			proc_create("qos_enable", 0666,
-				    proc_oplus_scheduler_dir,
-				    &oplus_qos_enable_proc_ops);
-		proc_sched_assist_dir = proc_mkdir("sched_assist",
-						   proc_oplus_scheduler_dir);
-		if (proc_sched_assist_dir) {
-			proc_sched_assist_scene =
-				proc_create("sched_assist_scene", 0666,
-					    proc_sched_assist_dir,
-					    &sched_assist_scene_proc_ops);
-			proc_sched_assist_im_flag =
-				proc_create("im_flag", 0666,
-					    proc_sched_assist_dir,
-					    &sched_assist_im_flag_proc_ops);
-	proc_create("im_flag_app", 0666, proc_sched_assist_dir, &evx_im_flag_app_fops);
-			proc_sched_assist_debug_enabled =
-				proc_create("debug_enabled", 0666,
-					    proc_sched_assist_dir,
-					    &sched_assist_debug_enabled_proc_ops);
-			proc_sched_assist_lb_enable =
-				proc_create("lb_enable", 0666,
-					    proc_sched_assist_dir,
-					    &sched_assist_lb_enable_proc_ops);
-	proc_create("sched_impt_task", 0666, proc_sched_assist_dir, &evx_sched_impt_task_fops);
-			proc_sched_assist_qos_enable =
+	/* Native SchedAssist owns /proc/oplus_scheduler when enabled. */
+	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)) {
+		proc_oplus_scheduler_dir = proc_mkdir("oplus_scheduler", NULL);
+		if (proc_oplus_scheduler_dir) {
+			proc_oplus_scheduler_qos_enable =
 				proc_create("qos_enable", 0666,
-					    proc_sched_assist_dir,
+					    proc_oplus_scheduler_dir,
 					    &oplus_qos_enable_proc_ops);
-			proc_sched_assist_enabled =
-				proc_create("sched_assist_enabled", 0666,
-					    proc_sched_assist_dir,
-					    &oplus_qos_enable_proc_ops);
-			proc_sched_assist_ux_enable =
-				proc_create("ux_enable", 0666,
-					    proc_sched_assist_dir,
-					    &oplus_qos_enable_proc_ops);
-			proc_sched_assist_uaf_enable =
-				proc_create("uaf_enable", 0666,
-					    proc_sched_assist_dir,
-					    &oplus_qos_enable_proc_ops);
-			proc_sched_assist_feature_enable =
-				proc_create("feature_enable", 0666,
-					    proc_sched_assist_dir,
-					    &oplus_qos_enable_proc_ops);
+			proc_sched_assist_dir = proc_mkdir("sched_assist",
+							   proc_oplus_scheduler_dir);
+			if (proc_sched_assist_dir) {
+				proc_sched_assist_scene =
+					proc_create("sched_assist_scene", 0666,
+						    proc_sched_assist_dir,
+						    &sched_assist_scene_proc_ops);
+				proc_sched_assist_im_flag =
+					proc_create("im_flag", 0666,
+						    proc_sched_assist_dir,
+						    &sched_assist_im_flag_proc_ops);
+		proc_create("im_flag_app", 0666, proc_sched_assist_dir, &evx_im_flag_app_fops);
+				proc_sched_assist_debug_enabled =
+					proc_create("debug_enabled", 0666,
+						    proc_sched_assist_dir,
+						    &sched_assist_debug_enabled_proc_ops);
+				proc_sched_assist_lb_enable =
+					proc_create("lb_enable", 0666,
+						    proc_sched_assist_dir,
+						    &sched_assist_lb_enable_proc_ops);
+		proc_create("sched_impt_task", 0666, proc_sched_assist_dir, &evx_sched_impt_task_fops);
+				proc_sched_assist_qos_enable =
+					proc_create("qos_enable", 0666,
+						    proc_sched_assist_dir,
+						    &oplus_qos_enable_proc_ops);
+				proc_sched_assist_enabled =
+					proc_create("sched_assist_enabled", 0666,
+						    proc_sched_assist_dir,
+						    &oplus_qos_enable_proc_ops);
+				proc_sched_assist_ux_enable =
+					proc_create("ux_enable", 0666,
+						    proc_sched_assist_dir,
+						    &oplus_qos_enable_proc_ops);
+				proc_sched_assist_uaf_enable =
+					proc_create("uaf_enable", 0666,
+						    proc_sched_assist_dir,
+						    &oplus_qos_enable_proc_ops);
+				proc_sched_assist_feature_enable =
+					proc_create("feature_enable", 0666,
+						    proc_sched_assist_dir,
+						    &oplus_qos_enable_proc_ops);
+			}
 		}
 	}
 

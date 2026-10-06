@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+menu "OPlus drivers"
+
+config OPLUS_FEATURE_SCHED_ASSIST
+        bool "OPlus SchedAssist"
+        default n
+        help
+          Enable native OPlus SchedAssist imported from the
+          MT6899 Linux 6.6 OPlus kernel source.
+
+
+
+config EVONIX_OPLUS_SA_COMMON_HOOKS
+        bool "EVONIX common scheduler hook bridge"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Register enqueue/dequeue vendor hooks directly from the
+          common kernel when MediaTek scheduler.ko glue is not used.
+
+config LOCKING_PROTECT
+        bool "OPlus SchedAssist locking protection"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Enable locking protection required by native
+          MT6899 OPlus SchedAssist.
+
+
+config OPLUS_FEATURE_OPROJECT
+        bool "OPlus project/OCDT information"
+        default n
+        help
+          Build the native OPlus MTK project information driver.
+          On non-OPlus device trees EVONIX may provide a hardware-ID
+          compatibility fallback.
+
+
+config OPLUS_FEATURE_PHOENIX
+        bool "OPlus Phoenix boot monitor"
+        default n
+        help
+          Build the native OPlus Phoenix boot profiling and
+          boot-stage monitoring framework.
+
+config EVONIX_OPLUS_PHOENIX_WATCHDOG
+        bool "Enable OPlus Phoenix HLOS watchdog"
+        depends on OPLUS_FEATURE_PHOENIX
+        default n
+        help
+          Enable active Phoenix boot watchdog recovery.
+          Keep disabled until rodin boot-mode detection is validated.
+
+config EVONIX_OPLUS_PHOENIX_RECOVERY
+        bool "Enable OPlus Phoenix panic recovery"
+        depends on OPLUS_FEATURE_PHOENIX
+        default n
+        help
+          Allow Phoenix hang handling to trigger active recovery.
+          Keep disabled during compatibility testing.
+
+endmenu
+source "drivers/soc/oplus/device_info/Kconfig"
+source "drivers/soc/oplus/midas/Kconfig"
+source "drivers/soc/oplus/cpufreq_health/Kconfig"
+source "drivers/soc/oplus/frame_boost/Kconfig"
+
+source "drivers/soc/oplus/healthinfo_lite/Kconfig"
+
+source "drivers/soc/oplus/waker_identify/Kconfig"

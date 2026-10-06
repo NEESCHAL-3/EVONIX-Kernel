@@ -1,0 +1,11 @@
+config EVONIX_OPLUS_HEALTHINFO_LITE
+	bool "EVONIX OPlus HealthInfo Lite"
+	default n
+	help
+	  Minimal OPlus HealthInfo compatibility interface.
+
+	  Provides:
+	    /proc/oplus_healthinfo/cpu_loading
+
+	  Intended for ColorOS PerformanceService compatibility without
+	  importing the complete OPlus sched_info subsystem.
