@@ -14,6 +14,8 @@
 #include <linux/cpuidle.h>
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
+#include <linux/workqueue.h>
+#include <linux/jiffies.h>
 #include <trace/hooks/cpuidle.h>
 #include <trace/hooks/cpufreq.h>
 
@@ -41,6 +43,7 @@ struct time_in_state {
 static DEFINE_PER_CPU(struct time_in_state, stats_info);
 
 static bool initialized = false;
+static struct delayed_work cpu_load_retry_work;
 
 /* called with icpu->lock held */
 static void inline update_cur_state(struct time_in_state *icpu, u64 now)
@@ -202,14 +205,20 @@ static int time_in_state_init(void)
 		icpu->cur_idle_idx = 0;
 
 		ret = cpufreq_get_policy(&policy, cpu);
-		if (ret != 0)
+		if (ret != 0) {
+			pr_info("game_opt: cpu_load policy not ready for cpu%d ret=%d\n",
+				cpu, ret);
 			goto err_out;
+		}
 
 		icpu->max_freq = policy.cpuinfo.max_freq / KHZ_PER_MHZ;
 
 		count = cpufreq_table_count_valid_entries(&policy);
-		if (!count)
+		if (!count) {
+			ret = -EAGAIN;
+			pr_info("game_opt: cpu_load freq table not ready for cpu%d\n", cpu);
 			goto err_out;
+		}
 
 		icpu->max_freq_state = count;
 		icpu->time_array_size = icpu->max_idle_state * icpu->max_freq_state;
@@ -217,6 +226,7 @@ static int time_in_state_init(void)
 		alloc_size = icpu->max_freq_state * sizeof(unsigned int) + icpu->time_byte_size;
 		icpu->freq_table = kzalloc(alloc_size, GFP_KERNEL);
 		if (icpu->freq_table == NULL) {
+			ret = -ENOMEM;
 			pr_err("time in stats alloc fail for cpu:%d\n", cpu);
 			goto err_out;
 		}
@@ -227,8 +237,12 @@ static int time_in_state_init(void)
 			icpu->freq_table[i++] = pos->frequency / KHZ_PER_MHZ;
 
 		freq_index = cpufreq_table_get_index(icpu, policy.cur);
-		if (freq_index < 0)
+		if (freq_index < 0) {
+			ret = -EAGAIN;
+			pr_info("game_opt: cpu_load current freq not ready for cpu%d cur=%u\n",
+				cpu, policy.cur);
 			goto err_out;
+		}
 		icpu->cur_freq_idx = freq_index;
 
 		spin_lock_init(&icpu->lock);
@@ -240,20 +254,21 @@ static int time_in_state_init(void)
 	register_trace_android_vh_cpufreq_fast_switch(android_vh_cpufreq_fast_switch, NULL);
 
 	initialized = true;
+	pr_info("game_opt: cpu_load accounting initialized\n");
+
+	return 0;
 
 err_out:
-	if (!initialized) {
-		for_each_present_cpu(cpu) {
-			icpu = per_cpu_ptr(&stats_info, cpu);
+	for_each_present_cpu(cpu) {
+		icpu = per_cpu_ptr(&stats_info, cpu);
 
-			if (icpu->freq_table != NULL) {
-				kfree(icpu->freq_table);
-				icpu->freq_table = NULL;
-			}
+		if (icpu->freq_table != NULL) {
+			kfree(icpu->freq_table);
+			icpu->freq_table = NULL;
 		}
 	}
 
-	return 0;
+	return ret ? ret : -EAGAIN;
 }
 
 static int cpu_load_show(struct seq_file *m, void *v)
@@ -320,9 +335,35 @@ static const struct proc_ops gamt_proc_ops = {
 	.proc_release	= single_release,
 };
 
+static void cpu_load_retry_worker(struct work_struct *work)
+{
+	int ret;
+
+	if (READ_ONCE(initialized))
+		return;
+
+	ret = time_in_state_init();
+	if (ret) {
+		pr_info_ratelimited(
+			"game_opt: cpu_load init deferred ret=%d, retrying\n", ret);
+		schedule_delayed_work(&cpu_load_retry_work,
+			msecs_to_jiffies(1000));
+	}
+}
+
 int cpu_load_init(void)
 {
-	time_in_state_init();
+	int ret;
+
+	INIT_DELAYED_WORK(&cpu_load_retry_work, cpu_load_retry_worker);
+
+	ret = time_in_state_init();
+	if (ret) {
+		pr_info("game_opt: cpu_load init not ready ret=%d, deferring\n",
+			ret);
+		schedule_delayed_work(&cpu_load_retry_work,
+			msecs_to_jiffies(1000));
+	}
 
 	proc_create_data("cpu_load", 0444, game_opt_dir, &cpu_load_proc_ops, NULL);
 	proc_create_data("gamt", 0664, game_opt_dir, &gamt_proc_ops, NULL);
