@@ -9,6 +9,10 @@
 #include <linux/proc_fs.h>
 
 #include "game_ctrl.h"
+#include "frame_sync.h"
+#include "yield_opt.h"
+#include "critical_task_boost.h"
+#include "task_boost/heavy_task_boost.h"
 
 struct proc_dir_entry *game_opt_dir = NULL;
 struct proc_dir_entry *early_detect_dir = NULL;
@@ -43,6 +47,12 @@ static int __init game_ctrl_init(void)
 	rt_info_init();
 	fake_cpufreq_init();
 	debug_init();
+
+	/* Extended native GameOpt components */
+	yield_opt_init();
+	heavy_task_boost_init();
+	hrtimer_boost_init();
+	frame_sync_init();
 
 	return 0;
 }
