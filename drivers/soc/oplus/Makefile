@@ -11,3 +11,4 @@ obj-$(CONFIG_OPLUS_FEATURE_FRAME_BOOST) += frame_boost/
 obj-$(CONFIG_EVONIX_OPLUS_HEALTHINFO_LITE) += healthinfo_lite/
 
 obj-$(CONFIG_OPLUS_FEATURE_WAKER_IDENTIFY) += waker_identify/
+obj-$(CONFIG_OPLUS_FEATURE_GAME_OPT) += game_opt/
