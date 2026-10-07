@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config OPLUS_FEATURE_GAME_OPT
+	bool "OPlus GameOpt"
+	default n
+	help
+	  Enable the native OPlus MT6899 GameOpt framework.
+	  Provides /proc/game_opt interfaces used by ColorOS GameOpt HAL,
+	  including CPU load, render-thread tracking, frequency controls,
+	  early detection, frame synchronization and task boosting.
