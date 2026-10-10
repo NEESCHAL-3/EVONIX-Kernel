@@ -11071,7 +11071,7 @@ static int cpu_uclamp_ls_write_u64(struct cgroup_subsys_state *css,
 	if (ls > 1)
 		return -EINVAL;
 	tg = css_tg(css);
-	WRITE_ONCE(tg->latency_sensitive, (unsigned int) ls);
+	WRITE_ONCE(tg->latency_sensitive, (unsigned int)ls);
 
 	return 0;
 }
@@ -11081,7 +11081,7 @@ static u64 cpu_uclamp_ls_read_u64(struct cgroup_subsys_state *css,
 {
 	struct task_group *tg = css_tg(css);
 
-	return (u64) READ_ONCE(tg->latency_sensitive);
+	return (u64)READ_ONCE(tg->latency_sensitive);
 }
 #endif /* CONFIG_UCLAMP_TASK_GROUP */
 
