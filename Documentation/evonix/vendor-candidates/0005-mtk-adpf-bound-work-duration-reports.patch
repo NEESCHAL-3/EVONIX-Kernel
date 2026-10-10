@@ -1,0 +1,37 @@
+Subject: [PATCH] mtk: adpf: bound work reports to session array capacity
+
+The session holds ADPF_MAX_THREAD work-duration entries but the report ioctl
+accepts any positive report count. Validate the upper bound before allocating
+or copying the report and again in the Power HAL callback before indexing the
+session array. Keep valid report processing and the existing ioctl error path.
+
+This is an UNAPPLIED vendor perf_ioctl / powerhal_cpu_ctrl safety candidate.
+It does not enlarge session structures or alter the userspace ABI.
+
+diff --git a/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c b/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c
+--- a/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c
++++ b/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c
+@@ -135,7 +135,8 @@
+ 				powerhal_adpf_update_work_duration_fp(t_msgKM->sid,
+ 					t_msgKM->targetDurationNanos);
+ 		} else if (t_msgKM->cmd == ADPF_REPORT_ACTUAL_WORK_DURATION) {
+-			if (t_msgKM->work_duration_size <= 0) {
++			if (t_msgKM->work_duration_size <= 0 ||
++			    t_msgKM->work_duration_size > ADPF_MAX_THREAD) {
+ 				pr_debug("ADPF_REPORT_ACTUAL_WORK_DURATION threadIds_size error: %d",
+ 					t_msgKM->work_duration_size);
+ 				ret = -EFAULT;
+diff --git a/drivers/misc/mediatek/performance/powerhal_cpu_ctrl/powerhal_cpu_ctrl.c b/drivers/misc/mediatek/performance/powerhal_cpu_ctrl/powerhal_cpu_ctrl.c
+--- a/drivers/misc/mediatek/performance/powerhal_cpu_ctrl/powerhal_cpu_ctrl.c
++++ b/drivers/misc/mediatek/performance/powerhal_cpu_ctrl/powerhal_cpu_ctrl.c
+@@ -601,6 +601,10 @@ int adpf_report_actual_work_duaration(unsigned int sid,
+ 	if (!adpf_enable)
+ 		return 0;
+ 
++	if (!workDuration || work_duration_size <= 0 ||
++	    work_duration_size > ADPF_MAX_THREAD)
++		return -1;
++
+ 	mutex_lock(&adpf_mutex);
+ 	if (sid >= ADPF_MAX_SESSION || sessionList[sid]->used == SESSION_UNUSED) {
+ 		pr_debug("[%s] sid error: %d", __func__, sid);
