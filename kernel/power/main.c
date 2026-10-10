@@ -1040,7 +1040,13 @@ EXPORT_SYMBOL_GPL(pm_wq);
 
 static int __init pm_start_workqueues(void)
 {
-	pm_wq = alloc_workqueue("pm", WQ_FREEZABLE, 0);
+	unsigned int flags = WQ_FREEZABLE;
+
+	/* Device serialization does not require the submitting CPU. */
+	if (IS_ENABLED(CONFIG_EVONIX_RODIN_PM_WQ))
+		flags |= WQ_POWER_EFFICIENT;
+
+	pm_wq = alloc_workqueue("pm", flags, 0);
 	if (!pm_wq)
 		return -ENOMEM;
 
