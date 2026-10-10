@@ -6,7 +6,7 @@ the userspace copy still copies only count elements. Use the element size
 for create-session, work-report and set-threads temporary buffers.
 
 Keep validation, copied lengths, callbacks, allocation failure handling and
-freeing unchanged. This is an UNAPPLIED vendor perf_ioctl module candidate.
+freeing unchanged. This targets the vendor perf_ioctl module.
 
 diff --git a/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c b/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c
 --- a/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c

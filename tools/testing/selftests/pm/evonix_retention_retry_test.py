@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Offline retry timing model for the unapplied MediaTek LPM candidate."""
+"""Offline retry timing model for the MediaTek LPM source change."""
 
 from pathlib import Path
 import unittest
