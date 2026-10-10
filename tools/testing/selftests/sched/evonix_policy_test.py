@@ -223,7 +223,7 @@ class SourceContracts(unittest.TestCase):
         body = function(FAIR, "check_preempt_wakeup")
         self.assertIn("bool protect_slice = true;", body)
         self.assertLess(body.index("p->policy != SCHED_NORMAL"),
-                        body.index("protect_slice = !evonix_ui_wakeup"))
+                        body.index("protect_slice = !(evonix_ui_wakeup"))
         tail = body[body.index("preempt:\n"):]
         self.assertLess(tail.index("if (ignore)"), tail.index("se->vlag = 0;"))
         self.assertLess(tail.index("se->vlag = 0;"), tail.index("resched_curr(rq);"))
@@ -239,9 +239,9 @@ class SourceContracts(unittest.TestCase):
     def test_vendor_wakeup_hook_precedes_new_preference(self):
         body = function(FAIR, "check_preempt_wakeup")
         self.assertLess(body.index("trace_android_rvh_check_preempt_wakeup(rq"),
-                        body.index("protect_slice = !evonix_ui_wakeup"))
+                        body.index("protect_slice = !(evonix_ui_wakeup"))
         self.assertLess(body.index("throttled_hierarchy"),
-                        body.index("protect_slice = !evonix_ui_wakeup"))
+                        body.index("protect_slice = !(evonix_ui_wakeup"))
 
     def test_latency_flag_uses_ordered_access_and_no_task_names(self):
         body = function(FAIR, "evonix_ui_wakeup")

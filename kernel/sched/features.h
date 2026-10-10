@@ -109,3 +109,10 @@ SCHED_FEAT(EVONIX_LATENCY_SLICE, true)
 #else
 SCHED_FEAT(EVONIX_LATENCY_SLICE, false)
 #endif
+
+/* Shorter eligible requests may cancel the current request's protection. */
+#ifdef CONFIG_EVONIX_RODIN_SHORT_SLICE
+SCHED_FEAT(PREEMPT_SHORT, true)
+#else
+SCHED_FEAT(PREEMPT_SHORT, false)
+#endif
