@@ -1,0 +1,27 @@
+Subject: [PATCH] mtk: sugov: bypass direction delays for forced updates
+
+sugov_should_update_freq() intentionally bypasses its rate limit for a
+changed policy limit or increased deadline bandwidth. However, the next
+stage applies the up/down delay unconditionally and can reject that
+forced update. Honor need_freq_update at both stages.
+
+Ordinary transitions still use the configured direction delays. Keep
+the forced flag until an update is accepted; retain the vendor workload
+and enqueue checks, driver calls, policy limits and thermal protection.
+Zero-delay policies retain the same decision results.
+
+This targets the Rodin vendor scheduler module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/sched/sugov/cpufreq_sugov_main.c b/drivers/misc/mediatek/sched/sugov/cpufreq_sugov_main.c
+--- a/drivers/misc/mediatek/sched/sugov/cpufreq_sugov_main.c
++++ b/drivers/misc/mediatek/sched/sugov/cpufreq_sugov_main.c
+@@ -195,7 +195,8 @@
+ static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
+ 				   unsigned int next_freq)
+ {
+-	if (sugov_up_down_rate_limit(sg_policy, time, next_freq))
++	if (!sg_policy->need_freq_update &&
++	    sugov_up_down_rate_limit(sg_policy, time, next_freq))
+ 		return false;
+ 
+ 	if (sg_policy->need_freq_update || wl_dsu_cnt_cached != wl_dsu_delay_ch_cnt ||
