@@ -1,0 +1,25 @@
+Subject: [PATCH] mtk: ccif: defer periodic traffic reports during CPU idle
+
+The CCIF traffic timer queues diagnostic work that prints port and packet
+counters and rearms the same timer. It is not the modem health watchdog
+or the packet-delivery path. Let that diagnostic timer defer during CPU
+idle instead of waking a CPU solely to queue a status dump.
+
+Retain the callback, workqueue, nominal interval, log counters, timer
+start/stop and all hardware wake/recovery paths. Reports may arrive later
+when idle; active packet handling does not depend on the report deadline.
+
+This targets the Rodin vendor CCCI module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_hif_ccif.c
+@@ -1811,7 +1811,7 @@
+ 
+ 	timer_setup(&ccif_ctrl->traffic_monitor,
+-		md_ccif_traffic_monitor_func, 0);
++		    md_ccif_traffic_monitor_func, TIMER_DEFERRABLE);
+ 	INIT_WORK(&ccif_ctrl->traffic_info.traffic_work_struct,
+ 		md_ccif_traffic_work_func);
+ 
+ 	ccif_ctrl->channel_id = 0;
