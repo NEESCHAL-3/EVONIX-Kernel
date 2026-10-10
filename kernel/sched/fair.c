@@ -12138,7 +12138,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		goto out;
 
 	if (rq->nr_running >= 2) {
-		flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+		flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 		goto out;
 	}
 
@@ -12150,7 +12150,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		 * on.
 		 */
 		if (rq->cfs.h_nr_running >= 1 && check_cpu_capacity(rq, sd)) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 			goto out;
 		}
 	}
@@ -12168,7 +12168,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		for_each_cpu_and(i, sched_domain_span(sd), nohz.idle_cpus_mask) {
 			if (sched_use_asym_prio(sd, i) &&
 			    sched_asym_prefer(i, cpu)) {
-				flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+				flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 				goto out;
 			}
 		}
@@ -12181,7 +12181,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		 * to run the misfit task on.
 		 */
 		if (check_misfit_status(rq, sd)) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 			goto out;
 		}
 
@@ -12208,7 +12208,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		 */
 		nr_busy = atomic_read(&sds->nr_busy_cpus);
 		if (nr_busy > 1) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 			goto out;
 		}
 	}
