@@ -7972,11 +7972,17 @@ static inline unsigned long
 compute_energy(struct energy_env *eenv, struct perf_domain *pd,
 	       struct cpumask *pd_cpus, struct task_struct *p, int dst_cpu)
 {
-	unsigned long max_util = eenv_pd_max_util(eenv, pd_cpus, p, dst_cpu);
 	unsigned long busy_time = eenv->pd_busy_time;
+	unsigned long max_util;
 
 	if (dst_cpu >= 0)
 		busy_time = min(eenv->pd_cap, busy_time + eenv->task_busy_time);
+
+	/* The EM returns zero for an idle domain, irrespective of its OPP. */
+	if (!busy_time)
+		return 0;
+
+	max_util = eenv_pd_max_util(eenv, pd_cpus, p, dst_cpu);
 
 	return em_cpu_energy(pd->em_pd, max_util, busy_time, eenv->cpu_cap);
 }
