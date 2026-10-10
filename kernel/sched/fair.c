@@ -925,7 +925,7 @@ struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
  *
  * Which allows tree pruning through eligibility.
  */
-static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
+static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice)
 {
 	struct rb_node *node = cfs_rq->tasks_timeline.rb_root.rb_node;
 	struct sched_entity *se = __pick_first_entity(cfs_rq);
@@ -946,7 +946,8 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 	 * Once selected, run a task until it either becomes non-eligible or
 	 * until it gets a new slice. See the HACK in set_next_entity().
 	 */
-	if (sched_feat(RUN_TO_PARITY) && curr && curr->vlag == curr->deadline)
+	if (protect_slice && sched_feat(RUN_TO_PARITY) && curr &&
+	    curr->vlag == curr->deadline)
 		return curr;
 
 	/* Pick the leftmost entity if it's eligible */
@@ -5516,7 +5517,7 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	    cfs_rq->next && entity_eligible(cfs_rq, cfs_rq->next))
 		return cfs_rq->next;
 
-	return pick_eevdf(cfs_rq);
+	return pick_eevdf(cfs_rq, true);
 }
 
 static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq);
@@ -8370,6 +8371,20 @@ static void set_next_buddy(struct sched_entity *se)
 	}
 }
 
+static inline bool evonix_ui_wakeup(struct task_struct *p,
+				    struct task_struct *curr)
+{
+#ifdef CONFIG_EVONIX_RODIN_UI_WAKEUP
+	if (!sched_feat(EVONIX_UI_WAKEUP))
+		return false;
+
+	return READ_ONCE(task_group(p)->latency_sensitive) &&
+	       !READ_ONCE(task_group(curr)->latency_sensitive);
+#else
+	return false;
+#endif
+}
+
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -8382,6 +8397,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	int cse_is_idle, pse_is_idle;
 	bool ignore = false;
 	bool preempt = false;
+	bool protect_slice = true;
 
 	if (unlikely(se == pse))
 		return;
@@ -8451,9 +8467,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		return;
 
 	/*
-	 * XXX pick_eevdf(cfs_rq) != se ?
+	 * A ROM-marked latency-sensitive wakee may compete on its deadline
+	 * before a background entity finishes its protected request. Keep
+	 * eligibility, group weights and the vendor's decision unchanged.
 	 */
-	if (pick_eevdf(cfs_rq) == pse)
+	protect_slice = !evonix_ui_wakeup(p, curr);
+	if (pick_eevdf(cfs_rq, protect_slice) == pse)
 		goto preempt;
 
 	return;
@@ -8463,6 +8482,14 @@ preempt:
 
 	if (ignore)
 		return;
+
+	/*
+	 * set_next_entity() stores slice protection in vlag. Clear it only
+	 * after selecting the wakee and after the vendor permits rescheduling,
+	 * otherwise the next pick would immediately select current again.
+	 */
+	if (!protect_slice)
+		se->vlag = 0;
 
 	resched_curr(rq);
 }
