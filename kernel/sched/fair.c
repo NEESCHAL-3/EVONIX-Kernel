@@ -7612,7 +7612,7 @@ select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target,
 	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
 
 	for_each_cpu_wrap(cpu, cpus, target) {
-		unsigned long cpu_cap = capacity_of(cpu);
+		unsigned long cpu_cap;
 
 		if (!available_idle_cpu(cpu) && !sched_idle_cpu(cpu))
 			continue;
@@ -7628,6 +7628,8 @@ select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target,
 		 */
 		else if (fits < 0)
 			cpu_cap = capacity_orig_of(cpu) - thermal_load_avg(cpu_rq(cpu));
+		else
+			cpu_cap = capacity_of(cpu);
 
 		/*
 		 * First, select CPU which fits better (-1 being better than 0).
