@@ -274,7 +274,7 @@ out_copy_to_user:
 static DEFINE_MUTEX(susfs_mutex_lock_sus_kstat);
 static DEFINE_HASHTABLE(SUS_KSTAT_HLIST, 14);
 
-extern int susfs_calculate_f_flags(struct vfsmount *mnt);
+extern int calculate_f_flags_wrapper(struct vfsmount *mnt);
 
 static int statfs_by_dentry(struct dentry *dentry, struct kstatfs *buf)
 {
@@ -329,7 +329,7 @@ static int susfs_mark_inode_sus_kstat(char *target_pathname, struct st_susfs_sus
 		no_sus_vfsmnt = susfs_get_non_sus_vfsmnt_from_vfsmnt(path.mnt);
 		err = statfs_by_dentry(no_sus_vfsmnt->mnt_root, &new_entry->spoofed_kstatfs);
 		if (!err)
-			new_entry->spoofed_kstatfs.f_flags = susfs_calculate_f_flags(no_sus_vfsmnt);
+			new_entry->spoofed_kstatfs.f_flags = calculate_f_flags_wrapper(no_sus_vfsmnt);
 		dput(no_sus_vfsmnt->mnt_root);
 		mntput(no_sus_vfsmnt);
 		if (err)
@@ -350,7 +350,7 @@ static int susfs_mark_inode_sus_kstat(char *target_pathname, struct st_susfs_sus
 	no_sus_vfsmnt = susfs_get_non_sus_vfsmnt_from_vfsmnt(path.mnt);
 	err = statfs_by_dentry(no_sus_vfsmnt->mnt_root, &new_entry->spoofed_kstatfs);
 	if (!err)
-		new_entry->spoofed_kstatfs.f_flags = susfs_calculate_f_flags(no_sus_vfsmnt);
+		new_entry->spoofed_kstatfs.f_flags = calculate_f_flags_wrapper(no_sus_vfsmnt);
 	dput(no_sus_vfsmnt->mnt_root);
 	mntput(no_sus_vfsmnt);
 	if (err)
