@@ -35,6 +35,8 @@ cd common
 EVONIX_JOBS=8 bash build-evonix.sh ../out/evonix-v4.0
 ```
 
+The current candidate selects O3 for C and the ThinLTO link step. This is an
+optimization choice, not proof of faster workloads or lower power consumption.
 The script validates the compiler, ThinLTO, selected defaults and the bundled
 AutoFDO profile before invoking Kleaf. Eight jobs are a starting point,
 not a requirement for every host; reduce this on memory-constrained machines.
@@ -47,7 +49,11 @@ Confirm SELinux enforcement configuration, the correct KSU/Normal selection,
 and absence of accidental permissive options. Keep generated artifacts outside Git.
 
 The distribution includes kernel images, symbols, ABI data and SBOM outputs.
-A boot-only release ZIP does not install rebuilt vendor or ZRAM modules.
+A boot-only release ZIP does not install rebuilt vendor modules. This arm64
+candidate builds zRAM and ZSMALLOC into Image; no replacement compressed-swap
+modules or writes to the ROM's DLKM partitions are required by this build.
+Verify `CONFIG_ZRAM=y`, `CONFIG_ZSMALLOC=y` and their entries in `modules.builtin`.
+The final boot test must check swap setup and the ROM's module-loader behavior.
 
 Before device testing, retain a known-good boot image and recovery path.
 Record ROM, slot, branch commit, Image checksum and actual runtime results.
