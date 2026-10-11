@@ -8092,8 +8092,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 {
 	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_rq_mask);
 	unsigned long prev_delta = ULONG_MAX, best_delta = ULONG_MAX;
-	unsigned long p_util_min = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MIN) : 0;
-	unsigned long p_util_max = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MAX) : 1024;
+	unsigned long p_util_min, p_util_max;
 	struct root_domain *rd = this_rq()->rd;
 	int cpu, best_energy_cpu, target = -1;
 	int prev_fits = -1, best_fits = -1;
@@ -8134,6 +8133,10 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 		goto unlock;
 
 	target = prev_cpu;
+
+	/* Vendor placement and unavailable domains need no fallback clamp reads. */
+	p_util_min = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MIN) : 0;
+	p_util_max = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MAX) : 1024;
 
 	/* The task's PELT state was synchronized before the fit checks above. */
 	if (!task_util_est(p) && p_util_min == 0)
