@@ -6960,8 +6960,9 @@ static ssize_t memory_reclaim(struct kernfs_open_file *of, char *buf,
 		unsigned long batch_size = (nr_to_reclaim - nr_reclaimed) / 4;
 		unsigned long reclaimed;
 
+		/* Allow freezer interruption to restart the write after resume. */
 		if (signal_pending(current))
-			return -EINTR;
+			return -ERESTARTSYS;
 
 		/*
 		 * This is the final attempt, drain percpu lru caches in the
