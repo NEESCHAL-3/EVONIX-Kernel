@@ -636,7 +636,16 @@ class MemoryContracts(unittest.TestCase):
                      "mm/readahead.c", "mm/workingset.c", "mm/page-writeback.c",
                      "arch/arm64/configs/gki_defconfig", "drivers/block/zram/zcomp.c",
                      "include/linux/zsmalloc.h", "include/linux/damon.h", "kernel/sched/psi.c"):
-            self.assertEqual(source(path), source(path, True))
+            current_source = source(path)
+            baseline_source = source(path, True)
+            if path == "arch/arm64/configs/gki_defconfig":
+                # Deployment changed from a ROM module to built-in zRAM;
+                # every other base configuration policy must remain intact.
+                self.assertEqual(current_source.count("CONFIG_ZRAM=y\n"), 1)
+                self.assertEqual(baseline_source.count("CONFIG_ZRAM=m\n"), 1)
+                current_source = current_source.replace("CONFIG_ZRAM=y\n",
+                                                        "CONFIG_ZRAM=m\n")
+            self.assertEqual(current_source, baseline_source)
 
     def test_already_present_zram_io_fixes_are_retained(self):
         self.assertIn("zram_read_page(zram, page, index, NULL)",
