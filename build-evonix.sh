@@ -157,7 +157,7 @@ for option in \
     CONFIG_LTO_CLANG=y \
     CONFIG_LTO_CLANG_THIN=y \
     CONFIG_AUTOFDO_CLANG=y \
-    CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y \
+    CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y \
     CONFIG_ARM64_TUNE_CORTEX_A725=y \
     CONFIG_EVONIX_RODIN_SCHED_SLICE_US=500 \
     CONFIG_EVONIX_RODIN_UI_WAKEUP=y \
@@ -186,8 +186,8 @@ if grep -qx 'CONFIG_LTO_NONE=y' "$CFG"; then
     die "Final kernel unexpectedly contains CONFIG_LTO_NONE=y."
 fi
 
-if grep -Eq '^CONFIG_CC_OPTIMIZE_FOR_(PERFORMANCE_O3|SIZE)=y$' "$CFG"; then
-    die "Final config unexpectedly selected experimental O3 or size optimization."
+if grep -Eq '^CONFIG_CC_OPTIMIZE_FOR_(PERFORMANCE|SIZE)=y$' "$CFG"; then
+    die "Final config unexpectedly selected O2 or size optimization instead of O3."
 fi
 
 if grep -qx 'CONFIG_RCU_LAZY_DEFAULT_OFF=y' "$CFG"; then
