@@ -8023,6 +8023,11 @@ eenv_pd_max_util(struct energy_env *eenv, struct cpumask *pd_cpus,
 		 */
 		eff_util = effective_cpu_util(cpu, util, FREQUENCY_UTIL, tsk);
 		max_util = max(max_util, eff_util);
+
+		/* Keep the full traversal when a vendor owns utilization queries. */
+		if (max_util >= eenv->cpu_cap &&
+		    !trace_android_rvh_effective_cpu_util_enabled())
+			return eenv->cpu_cap;
 	}
 
 	return min(max_util, eenv->cpu_cap);
