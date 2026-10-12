@@ -587,15 +587,13 @@ static unsigned int __swapin_nr_pages(unsigned long prev_offset,
 		pages = roundup;
 	}
 
-	if (pages > max_pages)
-		pages = max_pages;
-
 	/* Don't shrink readahead too fast */
 	last_ra = prev_win / 2;
 	if (pages < last_ra)
 		pages = last_ra;
 
-	return pages;
+	/* Old window history must not override a lowered readahead ceiling. */
+	return min_t(unsigned int, pages, max_pages);
 }
 
 static unsigned long swapin_nr_pages(unsigned long offset)
