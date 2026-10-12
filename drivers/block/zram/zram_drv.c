@@ -1628,6 +1628,14 @@ static int zram_recompress(struct zram *zram, u32 index, struct page *page,
 	if (comp_len_old < threshold)
 		return 0;
 
+	/* Do not decompress or clear IDLE without an eligible compressor. */
+	for (; prio < prio_max; prio++) {
+		if (zram->comps[prio] && prio > zram_get_priority(zram, index))
+			break;
+	}
+	if (prio == prio_max)
+		return 0;
+
 	ret = zram_read_from_zspool(zram, page, index);
 	if (ret)
 		return ret;
@@ -1826,6 +1834,12 @@ static ssize_t recompress_store(struct device *dev,
 			ret = -EINVAL;
 			goto release_init_lock;
 		}
+	}
+
+	/* With no secondary compressor, there is no useful work to scan. */
+	if (zram->num_active_comps < 2) {
+		ret = len;
+		goto release_init_lock;
 	}
 
 	page = alloc_page(GFP_KERNEL);
