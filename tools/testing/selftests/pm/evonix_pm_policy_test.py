@@ -110,6 +110,36 @@ class SnapshotFixtures(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertNotIn("EVONIX_IDLE_SNAPSHOT_V1", result.stdout)
 
+    def test_unsupported_platform_nodes_do_not_hide_storage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index in range(130):
+                node = root / f"sys/bus/platform/devices/placeholder{index:03}/power/runtime_status"
+                node.parent.mkdir(parents=True)
+                node.write_text("unsupported\n")
+            storage = root / "sys/bus/scsi/devices/ufs/power/runtime_status"
+            storage.parent.mkdir(parents=True)
+            storage.write_text("suspended\n")
+            result = self.run_snapshot(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("@@ /sys/bus/scsi/devices/ufs/power/runtime_status\nsuspended", result.stdout)
+            self.assertNotIn("placeholder", result.stdout)
+
+    def test_each_bus_has_a_bounded_sampling_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for bus in ("platform", "scsi"):
+                for index in range(20):
+                    node = root / f"sys/bus/{bus}/devices/device{index:02}/power/runtime_status"
+                    node.parent.mkdir(parents=True)
+                    node.write_text("suspended\n")
+            result = self.run_snapshot(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for bus in ("platform", "scsi"):
+                self.assertEqual(result.stdout.count(f"@@ /sys/bus/{bus}/devices/"), 16 * 6)
+                self.assertIn(f"@@ runtime_pm_limit/{bus}", result.stdout)
+            self.assertNotIn("device16/power", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
