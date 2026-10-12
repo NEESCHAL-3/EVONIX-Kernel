@@ -193,6 +193,20 @@ config PM
 	  responsible for the actual handling of device suspend requests and
 	  wake-up events.
 
+config EVONIX_RODIN_PM_WQ
+	bool "Rodin power-efficient asynchronous runtime PM work"
+	depends on PM && ARM64_TUNE_CORTEX_A725
+	help
+	  Allow the PM workqueue to use unbound workers when the existing
+	  workqueue.power_efficient policy is enabled. This avoids requiring
+	  device idle, suspend and resume work to run on the submitting CPU.
+	  Keep the queue freezable and retain runtime PM's device serialization.
+
+	  This is a Rodin tuning candidate, not a change to device autosuspend
+	  delays, wakeup IRQs, firmware sleep states or CPU frequency policy.
+	  Disable this option, or boot with workqueue.power_efficient=0, to
+	  restore the original bound PM queue. If unsure, say N.
+
 config PM_DEBUG
 	bool "Power Management Debug Support"
 	depends on PM
