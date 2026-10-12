@@ -61,14 +61,22 @@ static int evx_attribute(const char *supply, const char *name,
 	} else {
 		if (!ops->show || !(kn->mode & 0444))
 			goto put_active;
-		buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
+		/* show() needs a full page, but only its returned bytes are parsed. */
+		buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 		if (!buf) {
 			ret = -ENOMEM;
 			goto put_active;
 		}
 		len = ops->show(kobj, kn->priv, buf);
-		ret = len <= 0 ? (len ? len : -EIO) :
-			len >= PAGE_SIZE ? -EOVERFLOW : kstrtoint(buf, 0, value);
+		if (len <= 0)
+			ret = len ? len : -EIO;
+		else if (len >= PAGE_SIZE)
+			ret = -EOVERFLOW;
+		else {
+			/* Do not depend on an OEM show() callback adding a terminator. */
+			buf[len] = '\0';
+			ret = kstrtoint(buf, 0, value);
+		}
 		kfree(buf);
 	}
 put_active:
