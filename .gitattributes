@@ -3,3 +3,5 @@
 *.dts diff=dts
 *.dts[io] diff=dts
 *.rs diff=rust
+# Unified-patch context intentionally prefixes tabs and blank lines with space.
+Documentation/evonix/vendor-candidates/*.patch -whitespace
