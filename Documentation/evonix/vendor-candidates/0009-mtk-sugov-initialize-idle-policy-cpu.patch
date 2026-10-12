@@ -1,0 +1,24 @@
+Subject: [PATCH] mtk: sugov: select a valid CPU for all-idle policy samples
+
+cpu_id is assigned only when a sampled active ratio is greater than zero.
+When all CPUs in a policy are idle, it remains uninitialized and is used
+to index last_idle_duratio. Default to the first CPU of the existing
+nonempty policy mask, preserving the current strict-greater tie rule.
+
+This prevents an undefined array access in the idle-ramp decision without
+changing activity ratios, thresholds, frequency tables or CPU topology.
+It targets the Rodin vendor scheduler module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c b/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
+--- a/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
++++ b/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
+@@ -2481,7 +2481,8 @@
+ void update_active_ratio_policy(struct cpumask *cpumask)
+ {
+-	unsigned int cpu_idx, cpu_id, first_cpu = cpumask_first(cpumask);
++	unsigned int cpu_idx, first_cpu = cpumask_first(cpumask);
++	unsigned int cpu_id = first_cpu;
+ 	unsigned int policy_max_active_ratio_tmp = 0;
+ 
+ 	for_each_cpu(cpu_idx, cpumask) {
+ 		cpu_active_ratio_cap[cpu_idx] = update_cpu_active_ratio(cpu_idx);
