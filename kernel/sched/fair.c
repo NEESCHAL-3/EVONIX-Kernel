@@ -1028,6 +1028,23 @@ int sched_update_scaling(void)
 
 static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
 
+/* Size requests without changing entity weights or group-level fairness. */
+static u64 evonix_entity_slice(struct sched_entity *se)
+{
+	u64 slice = READ_ONCE(sysctl_sched_base_slice);
+
+#ifdef CONFIG_EVONIX_RODIN_SHORT_SLICE
+	if (sched_feat(EVONIX_LATENCY_SLICE) && entity_is_task(se)) {
+		struct task_struct *p = task_of(se);
+
+		if (p->policy == SCHED_NORMAL &&
+		    READ_ONCE(task_group(p)->latency_sensitive))
+			return max_t(u64, 1, slice >> 1);
+	}
+#endif
+	return slice;
+}
+
 /*
  * XXX: strictly: vd_i += N*r_i/w_i such that: vd_i > ve_i
  * this is probably good enough.
@@ -1048,7 +1065,7 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * nice) while the request time r_i is determined by
 	 * sysctl_sched_base_slice.
 	 */
-	se->slice = sysctl_sched_base_slice;
+	se->slice = evonix_entity_slice(se);
 
 	/*
 	 * EEVDF: vd_i = ve_i + r_i / w_i
@@ -5216,7 +5233,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	u64 vslice, vruntime = avg_vruntime(cfs_rq);
 	s64 lag = 0;
 
-	se->slice = sysctl_sched_base_slice;
+	se->slice = evonix_entity_slice(se);
 	vslice = calc_delta_fair(se->slice, se);
 
 	/*

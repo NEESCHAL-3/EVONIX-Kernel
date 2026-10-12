@@ -458,6 +458,21 @@ config EVONIX_RODIN_UI_WAKEUP
 	  Disable EVONIX_UI_WAKEUP in sched_features for runtime comparison,
 	  or leave this option disabled to retain the original wakeup policy.
 
+config EVONIX_RODIN_SHORT_SLICE
+	bool "Rodin latency-sensitive EEVDF request sizing"
+	depends on EVONIX_RODIN_UI_WAKEUP
+	help
+	  Give SCHED_NORMAL task entities in ROM-marked latency-sensitive
+	  CPU cgroups half the normal EEVDF request length. Group entities,
+	  background tasks, nice weights and the general base slice are unchanged.
+	  Apply sizing at placement and request renewal, never by changing a
+	  queued entity's deadline behind the deadline tree.
+
+	  This is a source-only latency candidate, not a measured performance
+	  gain. Shorter requests can increase context switches under contention.
+	  Disable EVONIX_LATENCY_SLICE at runtime to restore normal request
+	  lengths as entities are placed or renew their requests.
+
 menu "ARM errata workarounds via the alternatives framework"
 
 config AMPERE_ERRATUM_AC03_CPU_38
