@@ -19,7 +19,7 @@ die() {
 }
 
 echo "============================================"
-echo " EVONIX Kernel Build"
+echo " EVONIX V4.5 Kernel Build"
 echo " Linux 6.6.142"
 echo " Clang 23 + ThinLTO + AutoFDO"
 echo "============================================"
