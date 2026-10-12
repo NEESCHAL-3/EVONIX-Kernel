@@ -8,7 +8,7 @@ Compare each cached clamp against the matching runqueue value. Leave the
 existing enqueue guard, locking, per-CPU DVFS target and governor unchanged.
 
 This candidate targets MTK_kernel_device_modules, not the common GKI tree.
-It is NOT active in EVONIX's boot image. Its exact deployed module version,
+It is not part of EVONIX's common boot image. The deployed module version,
 module ABI and packaging must be validated before using a rebuilt module.
 
 diff --git a/drivers/misc/mediatek/sched/eas/sched_main.c b/drivers/misc/mediatek/sched/eas/sched_main.c
