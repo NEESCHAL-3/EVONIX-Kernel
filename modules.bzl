@@ -127,13 +127,6 @@ def get_gki_modules_list(arch = None):
     if arch == "arm":
         gki_modules_list += _ARM_GKI_MODULES_LIST
     elif arch == "arm64":
-        # EVONIX's arm64 gki_defconfig builds these into Image. Do not ask
-        # Kleaf to collect nonexistent .ko outputs or package them in DLKM.
-        gki_modules_list = [
-            mod
-            for mod in gki_modules_list
-            if mod not in ["drivers/block/zram/zram.ko", "mm/zsmalloc.ko"]
-        ]
         gki_modules_list += _ARM64_GKI_MODULES_LIST
     elif arch == "i386":
         gki_modules_list += _X86_GKI_MODULES_LIST
