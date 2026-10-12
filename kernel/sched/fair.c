@@ -7585,19 +7585,17 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
  * maximize capacity.
  */
 static int
-select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target)
+select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target,
+		     unsigned long task_util, unsigned long util_min,
+		     unsigned long util_max)
 {
-	unsigned long task_util, util_min, util_max, best_cap = 0;
+	unsigned long best_cap = 0;
 	int fits, best_fits = 0;
 	int cpu, best_cpu = -1;
 	struct cpumask *cpus;
 
 	cpus = this_cpu_cpumask_var_ptr(select_rq_mask);
 	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
-
-	task_util = task_util_est(p);
-	util_min = uclamp_eff_value(p, UCLAMP_MIN);
-	util_max = uclamp_eff_value(p, UCLAMP_MAX);
 
 	for_each_cpu_wrap(cpu, cpus, target) {
 		unsigned long cpu_cap = capacity_of(cpu);
@@ -7728,7 +7726,9 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 		 * capacity path.
 		 */
 		if (sd) {
-			i = select_idle_capacity(p, sd, target);
+			/* Reuse the synchronized utilization and clamp snapshot. */
+			i = select_idle_capacity(p, sd, target, task_util,
+						 util_min, util_max);
 			return ((unsigned)i < nr_cpumask_bits) ? i : target;
 		}
 	}
