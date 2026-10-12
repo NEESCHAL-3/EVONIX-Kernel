@@ -953,7 +953,7 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 	avg_vruntime_snapshot(cfs_rq, &avg, &load);
 
 	if (curr && (!curr->on_rq ||
-	    !vruntime_eligible_snapshot(cfs_rq, curr->vruntime, avg, load)))
+		     !vruntime_eligible_snapshot(cfs_rq, curr->vruntime, avg, load)))
 		curr = NULL;
 
 	/*
@@ -979,7 +979,8 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 		 * choices, since they have earlier deadlines.
 		 */
 		if (left && vruntime_eligible_snapshot(cfs_rq,
-				__node_2_se(left)->min_vruntime, avg, load)) {
+						       __node_2_se(left)->min_vruntime,
+						       avg, load)) {
 			node = left;
 			continue;
 		}
