@@ -9199,9 +9199,11 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		 * - for NEWLY_IDLE
 		 * - if we have already computed one in current iteration
 		 * - if it's an active balance
+		 * - if migration is temporarily disabled for this task
 		 */
 		if (env->idle == CPU_NEWLY_IDLE ||
-		    env->flags & (LBF_DST_PINNED | LBF_ACTIVE_LB))
+		    env->flags & (LBF_DST_PINNED | LBF_ACTIVE_LB) ||
+		    is_migration_disabled(p))
 			return 0;
 
 		/* Prevent to re-select dst_cpu via env's CPUs: */
