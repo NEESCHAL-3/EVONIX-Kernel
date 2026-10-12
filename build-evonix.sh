@@ -136,20 +136,13 @@ echo "===== VERIFY OUTPUT ====="
 [[ -f "$DIST/vmlinux" ]] ||
     die "Build completed without vmlinux in the dist directory."
 
-CFG="$(
-    find "$WORKSPACE/out/bazel/output_user_root" \
-        -path '*kernel_aarch64_config/out_dir/.config' \
-        -type f \
-        -printf '%T@ %p\n' 2>/dev/null |
-    sort -nr |
-    head -n 1 |
-    cut -d' ' -f2-
-)"
+# Validate the Image being delivered, not a potentially stale or concurrent
+# build's configuration selected by output-directory modification time.
+CFG="$DIST/embedded.config"
+"$COMMON_DIR/scripts/extract-ikconfig" "$DIST/Image" > "$CFG" ||
+    die "Could not extract the built Image configuration."
 
-[[ -n "$CFG" && -f "$CFG" ]] ||
-    die "Could not locate generated kernel .config."
-
-echo "Generated config: $CFG"
+echo "Embedded Image config: $CFG"
 echo
 
 for option in \
@@ -173,8 +166,8 @@ for option in \
     CONFIG_SUSPEND=y \
     CONFIG_SUSPEND_FREEZER=y \
     CONFIG_ENERGY_MODEL=y \
-    CONFIG_ZRAM=y \
-    CONFIG_ZSMALLOC=y \
+    CONFIG_ZRAM=m \
+    CONFIG_ZSMALLOC=m \
     CONFIG_ZRAM_WRITEBACK=y \
     CONFIG_ZRAM_MULTI_COMP=y \
     CONFIG_BBG=y \
@@ -185,6 +178,12 @@ do
     grep -qx "$option" "$CFG" ||
         die "Final kernel config is missing: $option"
 done
+
+[[ -f "$DIST/modules.builtin" ]] ||
+    die "Build completed without modules.builtin."
+if grep -Eq '(^|/)(zram|zsmalloc)\.ko$' "$DIST/modules.builtin"; then
+    die "ROM-owned compressed-swap drivers unexpectedly built into Image."
+fi
 
 if grep -qx 'CONFIG_LTO_NONE=y' "$CFG"; then
     die "Final kernel unexpectedly contains CONFIG_LTO_NONE=y."

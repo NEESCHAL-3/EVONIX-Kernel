@@ -8,7 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[4]
 
 
-class BuiltinZramTests(unittest.TestCase):
+class RomSwapCompatibilityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.modules = {}
@@ -16,10 +16,10 @@ class BuiltinZramTests(unittest.TestCase):
              cls.modules)
         cls.config = (ROOT / "arch/arm64/configs/evonix.config").read_text()
 
-    def test_arm64_does_not_declare_builtin_module_outputs(self):
+    def test_arm64_keeps_rom_compatible_module_outputs(self):
         modules = self.modules["get_gki_modules_list"]("arm64")
-        self.assertNotIn("drivers/block/zram/zram.ko", modules)
-        self.assertNotIn("mm/zsmalloc.ko", modules)
+        self.assertIn("drivers/block/zram/zram.ko", modules)
+        self.assertIn("mm/zsmalloc.ko", modules)
         self.assertEqual(len(modules), len(set(modules)))
 
     def test_other_architectures_keep_modular_swap_drivers(self):
@@ -30,16 +30,16 @@ class BuiltinZramTests(unittest.TestCase):
 
     def test_other_common_modules_are_preserved(self):
         expected = set(self.modules["_COMMON_GKI_MODULES_LIST"])
-        expected -= {"drivers/block/zram/zram.ko", "mm/zsmalloc.ko"}
         expected.update(self.modules["_ARM64_GKI_MODULES_LIST"])
         self.assertEqual(expected,
                          set(self.modules["get_gki_modules_list"]("arm64")))
 
-    def test_arm64_base_and_evonix_select_builtin_zram(self):
+    def test_arm64_base_and_evonix_keep_modular_swap(self):
         base = (ROOT / "arch/arm64/configs/gki_defconfig").read_text()
-        self.assertIn("\nCONFIG_ZRAM=y\n", base)
-        for option in ("ZRAM", "ZSMALLOC", "ZRAM_WRITEBACK", "ZRAM_MULTI_COMP"):
-            self.assertIn(f"\nCONFIG_{option}=y\n", self.config)
+        self.assertIn("\nCONFIG_ZRAM=m\n", base)
+        for option in ("ZRAM", "ZSMALLOC"):
+            self.assertIn(f"\nCONFIG_{option}=m\n", self.config)
+            self.assertNotIn(f"\nCONFIG_{option}=y\n", self.config)
 
     def test_compressors_remain_available_at_boot(self):
         base = (ROOT / "arch/arm64/configs/gki_defconfig").read_text()
@@ -52,8 +52,16 @@ class BuiltinZramTests(unittest.TestCase):
         self.assertIn("\nCONFIG_LTO_CLANG_THIN=y\n", self.config)
         script = (ROOT / "build-evonix.sh").read_text()
         for option in ("CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y",
-                       "CONFIG_ZRAM=y", "CONFIG_ZSMALLOC=y"):
+                       "CONFIG_ZRAM=m", "CONFIG_ZSMALLOC=m"):
             self.assertIn(option, script)
+
+    def test_verifier_reads_image_and_rejects_builtin_swap(self):
+        script = (ROOT / "build-evonix.sh").read_text()
+        self.assertIn('CFG="$DIST/embedded.config"', script)
+        self.assertIn('"$COMMON_DIR/scripts/extract-ikconfig" "$DIST/Image"', script)
+        self.assertIn('"$DIST/modules.builtin"', script)
+        self.assertIn("(^|/)(zram|zsmalloc)", script)
+        self.assertNotIn("-printf '%T@ %p", script)
 
 
 if __name__ == "__main__":
