@@ -10,7 +10,7 @@ successful-probe termination unchanged. Do not make this timer deferrable:
 that could postpone enabling CPU retention on an otherwise idle CPU.
 
 This targets the published MTK_kernel_device_modules platform/v2 source.
-It is an UNAPPLIED vendor candidate, not active in the common EVONIX kernel.
+It is a vendor module change, not part of the common EVONIX kernel image.
 Confirm the deployed platform version and hotplug/suspend behavior before
 building or packaging its module.
 

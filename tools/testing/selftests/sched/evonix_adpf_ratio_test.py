@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Offline wide-integer model for the unapplied MediaTek ADPF ratio fix."""
+"""Offline wide-integer model for the MediaTek ADPF ratio source fix."""
 
 from pathlib import Path
 import random

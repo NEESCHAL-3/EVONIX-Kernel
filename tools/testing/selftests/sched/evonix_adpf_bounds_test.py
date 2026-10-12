@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Offline bounds contracts for the unapplied MediaTek ADPF report fix."""
+"""Offline bounds contracts for the MediaTek ADPF report source fix."""
 
 from pathlib import Path
 import unittest

@@ -9,8 +9,8 @@ Keep signed duration precision and reject nonpositive values.
 Use mul_u64_u64_div_u64 for fractional scaling. Saturate at
 SCHED_CAPACITY_SCALE, matching the existing group setter's cap.
 The helper is already in the MediaTek GKI symbol list. No
-structure or exported API changes are required. This remains
-an UNAPPLIED vendor scheduler candidate.
+structure or exported API changes are required. This targets
+the vendor scheduler module, not the common boot image.
 
 diff --git a/drivers/misc/mediatek/sched/eas/eas_adpf.c b/drivers/misc/mediatek/sched/eas/eas_adpf.c
 --- a/drivers/misc/mediatek/sched/eas/eas_adpf.c
