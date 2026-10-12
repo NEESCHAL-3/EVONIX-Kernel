@@ -199,6 +199,14 @@ class NoHzRegression(unittest.TestCase):
 
 
 class SourceContracts(unittest.TestCase):
+    def test_unavailable_or_overloaded_eas_skips_pelt_sync(self):
+        body = function(FAIR, "find_energy_efficient_cpu")
+        gate = "if (!pd || READ_ONCE(rd->overutilized))"
+        sync = "sync_entity_load_avg(&p->se);"
+        self.assertLess(body.index(gate), body.index(sync))
+        self.assertIn("goto unlock;", body[body.index(gate):body.index(sync)])
+        self.assertLess(body.index(sync), body.index("task_fits_cpu(p, cpu)"))
+
     def test_pelt_sync_occurs_once_before_fit_check(self):
         body = function(FAIR, "find_energy_efficient_cpu")
         self.assertEqual(body.count("sync_entity_load_avg(&p->se);"), 1)
