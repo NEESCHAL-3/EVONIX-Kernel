@@ -95,16 +95,32 @@ for sample_attr in online usb_type; do
 done
 
 # No recursive device-tree walk and no forced runtime resumes. Bound output.
+# Reserve a per-bus budget: placeholder platform devices must not crowd out
+# USB, storage and connectivity devices. Skip unsupported runtime PM nodes.
 sample_devices=0
 for sample_bus in platform i2c spi usb sdio scsi pci; do
+	sample_bus_scanned=0
+	sample_bus_devices=0
 	for sample_power in "$sample_root"/sys/bus/"$sample_bus"/devices/*/power; do
 		[ -r "$sample_power/runtime_status" ] || continue
+		sample_bus_scanned=$((sample_bus_scanned + 1))
+		if [ "$sample_bus_scanned" -gt 256 ] || [ "$sample_bus_devices" -ge 16 ]; then
+			printf '\n@@ runtime_pm_limit/%s\n[bus scan/sample limit reached]\n' "$sample_bus"
+			break
+		fi
+		if sample_status=$(timeout -k 1 2 head -n 1 "$sample_power/runtime_status" 2>/dev/null); then
+			[ "$sample_status" != unsupported ] || continue
+		else
+			sample_status='[read failed or timed out]'
+		fi
 		sample_devices=$((sample_devices + 1))
 		if [ "$sample_devices" -gt 128 ]; then
 			printf '\n@@ runtime_pm_limit\n[truncated at 128 devices]\n'
 			break
 		fi
-		for sample_attr in runtime_status control autosuspend_delay_ms \
+		sample_bus_devices=$((sample_bus_devices + 1))
+		printf '\n@@ %s/runtime_status\n%s\n' "${sample_power#"$sample_root"}" "$sample_status"
+		for sample_attr in control autosuspend_delay_ms \
 				runtime_active_time runtime_suspended_time wakeup; do
 			read_node "${sample_power#"$sample_root"}/$sample_attr"
 		done
