@@ -9,6 +9,12 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class RomSwapCompatibilityTests(unittest.TestCase):
+    def test_ksu_configuration_preserves_root_support(self):
+        self.assertIn("\nCONFIG_KSU=y\n", self.config)
+        self.assertIn("\nCONFIG_KSU_SUSFS=y\n", self.config)
+        script = (ROOT / "build-evonix.sh").read_text()
+        self.assertNotIn("Normal unexpectedly contains", script)
+
     @classmethod
     def setUpClass(cls):
         cls.modules = {}

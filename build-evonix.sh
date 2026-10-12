@@ -193,6 +193,7 @@ if grep -Eq '^CONFIG_CC_OPTIMIZE_FOR_(PERFORMANCE_O3|SIZE)=y$' "$CFG"; then
     die "Final config unexpectedly selected experimental O3 or size optimization."
 fi
 
+
 if grep -qx 'CONFIG_RCU_LAZY_DEFAULT_OFF=y' "$CFG"; then
     die "RCU lazy batching unexpectedly remains default-off."
 fi
