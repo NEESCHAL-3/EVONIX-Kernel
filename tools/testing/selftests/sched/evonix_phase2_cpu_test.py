@@ -13,7 +13,7 @@ from evonix_policy_test import function as extract_function
 
 
 ROOT = Path(__file__).resolve().parents[4]
-BASELINE = "95d12f4e6"
+BASELINE = "b99470748b67392c52f92288be228c5bba9afbde"
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 CORE = (ROOT / "kernel/sched/core.c").read_text()
 CPUFREQ = (ROOT / "drivers/cpufreq/cpufreq.c").read_text()

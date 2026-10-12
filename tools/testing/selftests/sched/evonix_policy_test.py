@@ -12,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[4]
 # Recorded pre-tuning source, independent of which follow-up commit is HEAD.
-BASELINE = "f0715c711b58b418b03f1d928b2a4ec04adb79c6"
+BASELINE = "6f125bb292a7af4f8ec6f1abf2c5838078e61136"
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 CORE = (ROOT / "kernel/sched/core.c").read_text()
 FEATURES = (ROOT / "kernel/sched/features.h").read_text()
