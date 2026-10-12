@@ -9237,8 +9237,28 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		return 1;
 
 	tsk_cache_hot = migrate_degrades_locality(p, env);
-	if (tsk_cache_hot == -1)
+	if (tsk_cache_hot == -1) {
+		/*
+		 * A queued misfit can use an idle CPU that fully fits it.
+		 * Do not make it wait for cache cooling or a stopper when
+		 * the destination offers a real capacity uplift. Keep this
+		 * exception out of ordinary load/util balancing and retain
+		 * explicit migration-cost and core-cookie restrictions.
+		 */
+		if (env->migration_type == migrate_misfit &&
+		    env->sd->flags & SD_ASYM_CPUCAPACITY &&
+		    env->idle != CPU_NOT_IDLE &&
+		    sysctl_sched_migration_cost != -1 &&
+		    capacity_greater(capacity_of(env->dst_cpu),
+				     capacity_of(env->src_cpu)) &&
+		    available_idle_cpu(env->dst_cpu) &&
+		    !task_fits_cpu(p, env->src_cpu) &&
+		    task_fits_cpu(p, env->dst_cpu) &&
+		    sched_core_cookie_match(env->dst_rq, p))
+			return 1;
+
 		tsk_cache_hot = task_hot(p, env);
+	}
 
 	if (tsk_cache_hot <= 0 ||
 	    env->sd->nr_balance_failed > env->sd->cache_nice_tries) {
