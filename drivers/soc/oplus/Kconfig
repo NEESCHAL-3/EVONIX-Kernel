@@ -11,6 +11,14 @@ config OPLUS_FEATURE_SCHED_ASSIST
 
 
 
+config OPLUS_FEATURE_LOADBALANCE
+        bool "OPlus SchedAssist load balance"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default n
+        help
+          Enable the native OPlus load-balance extension used by
+          SchedAssist, including /proc/oplus_scheduler/sched_assist/lb_enable.
+
 config EVONIX_OPLUS_SA_COMMON_HOOKS
         bool "EVONIX common scheduler hook bridge"
         depends on OPLUS_FEATURE_SCHED_ASSIST
