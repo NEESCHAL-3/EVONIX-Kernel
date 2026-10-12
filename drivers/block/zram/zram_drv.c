@@ -627,7 +627,7 @@ static ssize_t writeback_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	struct zram *zram = dev_to_zram(dev);
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	unsigned long index = 0;
 	struct bio bio;
 	struct bio_vec bio_vec;
@@ -648,11 +648,9 @@ static ssize_t writeback_store(struct device *dev,
 		if (strncmp(buf, PAGE_WB_SIG, sizeof(PAGE_WB_SIG) - 1))
 			return -EINVAL;
 
-		if (kstrtol(buf + sizeof(PAGE_WB_SIG) - 1, 10, &index) ||
-				index >= nr_pages)
+		if (kstrtoul(buf + sizeof(PAGE_WB_SIG) - 1, 10, &index))
 			return -EINVAL;
 
-		nr_pages = 1;
 		mode = PAGE_WRITEBACK;
 	}
 
@@ -660,6 +658,15 @@ static ssize_t writeback_store(struct device *dev,
 	if (!init_done(zram)) {
 		ret = -EINVAL;
 		goto release_init_lock;
+	}
+
+	nr_pages = zram->disksize >> PAGE_SHIFT;
+	if (mode == PAGE_WRITEBACK) {
+		if (index >= nr_pages) {
+			ret = -EINVAL;
+			goto release_init_lock;
+		}
+		nr_pages = 1;
 	}
 
 	if (!zram->backing_dev) {
@@ -878,7 +885,7 @@ static ssize_t read_block_state(struct file *file, char __user *buf,
 	char *kbuf;
 	ssize_t index, written = 0;
 	struct zram *zram = file->private_data;
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	struct timespec64 ts;
 
 	kbuf = kvmalloc(count, GFP_KERNEL);
@@ -892,6 +899,7 @@ static ssize_t read_block_state(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
+	nr_pages = zram->disksize >> PAGE_SHIFT;
 	for (index = *ppos; index < nr_pages; index++) {
 		int copied;
 
@@ -1743,7 +1751,7 @@ static ssize_t recompress_store(struct device *dev,
 {
 	u32 prio = ZRAM_SECONDARY_COMP, prio_max = ZRAM_MAX_COMPS;
 	struct zram *zram = dev_to_zram(dev);
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	char *args, *param, *val, *algo = NULL;
 	u32 mode = 0, threshold = 0;
 	unsigned long index;
@@ -1793,6 +1801,7 @@ static ssize_t recompress_store(struct device *dev,
 		goto release_init_lock;
 	}
 
+	nr_pages = zram->disksize >> PAGE_SHIFT;
 	if (algo) {
 		bool found = false;
 
