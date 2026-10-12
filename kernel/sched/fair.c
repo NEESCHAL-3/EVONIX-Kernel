@@ -8140,6 +8140,11 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 		if (cpumask_empty(cpus))
 			continue;
 
+		/* No placement candidate: keep the full PD mask for real estimates. */
+		if (!cpumask_intersects(cpus, p->cpus_ptr) ||
+		    !cpumask_intersects(cpus, sched_domain_span(sd)))
+			continue;
+
 		/* Account thermal pressure for the energy estimation */
 		cpu = cpumask_first(cpus);
 		cpu_thermal_cap = arch_scale_cpu_capacity(cpu);
