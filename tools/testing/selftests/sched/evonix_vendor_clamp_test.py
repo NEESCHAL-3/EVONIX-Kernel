@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Offline decision-model test for the unapplied MediaTek vendor candidate."""
+"""Offline decision-model test for the MediaTek vendor source change."""
 
 import itertools
 from pathlib import Path

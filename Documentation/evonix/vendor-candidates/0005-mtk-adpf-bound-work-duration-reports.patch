@@ -5,7 +5,7 @@ accepts any positive report count. Validate the upper bound before allocating
 or copying the report and again in the Power HAL callback before indexing the
 session array. Keep valid report processing and the existing ioctl error path.
 
-This is an UNAPPLIED vendor perf_ioctl / powerhal_cpu_ctrl safety candidate.
+This targets the vendor perf_ioctl / powerhal_cpu_ctrl modules.
 It does not enlarge session structures or alter the userspace ABI.
 
 diff --git a/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c b/drivers/misc/mediatek/performance/perf_ioctl/ioctl_powerhal.c

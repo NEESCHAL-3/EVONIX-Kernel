@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Offline contracts for the unapplied ADPF temporary-allocation correction."""
+"""Offline contracts for the ADPF temporary-allocation source correction."""
 
 from pathlib import Path
 import unittest
