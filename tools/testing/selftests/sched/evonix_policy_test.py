@@ -173,6 +173,31 @@ class WakeupRegression(unittest.TestCase):
             self.assertEqual(preempt, expected)
 
 
+class NoHzRegression(unittest.TestCase):
+    def test_redundant_pending_flags_do_not_need_an_atomic_update(self):
+        kick_mask = 0b1011  # BALANCE, STATS, NEXT; NEWILB is separate.
+        for pending in range(16):
+            for request in range(1, 16):
+                if request & ~kick_mask:
+                    continue
+                old_flags = pending | request
+                old_ipi = not (pending & kick_mask)
+                if pending & request == request:
+                    new_flags, new_ipi = pending, False
+                else:
+                    new_flags, new_ipi = pending | request, not (pending & kick_mask)
+                self.assertEqual((new_flags, new_ipi), (old_flags, old_ipi))
+
+    def test_new_work_retains_original_atomic_and_ipi_ownership(self):
+        body = function(FAIR, "kick_ilb")
+        guard = "if ((atomic_read(nohz_flags(ilb_cpu)) & flags) == flags)"
+        self.assertLess(body.index("ilb_cpu >= nr_cpu_ids"), body.index(guard))
+        self.assertLess(body.index(guard), body.index("atomic_fetch_or"))
+        self.assertIn("if (flags & NOHZ_KICK_MASK)", body)
+        self.assertIn("smp_call_function_single_async(ilb_cpu", body)
+        self.assertIn("nohz.next_balance = jiffies+1;", body)
+
+
 class SourceContracts(unittest.TestCase):
     def test_pelt_sync_occurs_once_before_fit_check(self):
         body = function(FAIR, "find_energy_efficient_cpu")
