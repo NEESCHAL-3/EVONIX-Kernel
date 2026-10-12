@@ -1,0 +1,43 @@
+Subject: [PATCH] mtk: sugov: validate adaptive-margin sampling windows
+
+get_cpu_idle_time() reports microsecond timestamps. Two samples in one
+microsecond give a zero duration. Keep the previous ratio in that case,
+without consuming timestamp history or dividing by zero.
+
+The elapsed duration is u64, but div_u64() takes a u32 divisor. A window
+beyond about 71 minutes is truncated, giving a wrong activity ratio or
+a zero divisor. Use the inline ARM64 div64_u64() helper instead. Retain
+the existing capacity scale, idle-duration clamp and margin policy.
+
+This targets the Rodin vendor scheduler module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c b/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
+--- a/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
++++ b/drivers/misc/mediatek/sched/sugov/nonlinear_opp_cap.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2021 MediaTek Inc.
+  */
+ #include <linux/io.h>
++#include <linux/math64.h>
+ #include <linux/mm.h>
+ #include <linux/slab.h>
+ #include <linux/cpumask.h>
+@@ -2466,6 +2467,9 @@ inline int update_cpu_active_ratio(int cpu_idx)
+ 
+ 	idle_time_stamp = get_cpu_idle_time(cpu_idx, &wall_time_stamp, 1);
+ 	duration = wall_time_stamp - last_wall_time_stamp[cpu_idx];
++	if (!duration)
++		return READ_ONCE(cpu_active_ratio_cap[cpu_idx]);
++
+ 	idle_duration = idle_time_stamp - last_idle_time_stamp[cpu_idx];
+ 	idle_duration = min_t(u64, idle_duration, duration);
+ 	last_idle_duratio[cpu_idx] = idle_duration;
+@@ -2474,7 +2478,7 @@ inline int update_cpu_active_ratio(int cpu_idx)
+ 	last_wall_time_stamp[cpu_idx] = wall_time_stamp;
+ 	duration_wind[cpu_idx] = duration;
+ 	duration_act[cpu_idx] = active_duration;
+-	return div_u64((active_duration << SCHED_CAPACITY_SHIFT), duration);
++	return div64_u64(active_duration << SCHED_CAPACITY_SHIFT, duration);
+ }
+ 
+ void update_active_ratio_policy(struct cpumask *cpumask)
