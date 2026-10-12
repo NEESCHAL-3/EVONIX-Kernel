@@ -695,22 +695,32 @@ void avg_vruntime_update(struct cfs_rq *cfs_rq, s64 delta)
 	cfs_rq->avg_vruntime -= cfs_rq->avg_load * delta;
 }
 
+/* The caller holds the rq lock, so one snapshot serves an entire tree search. */
+static void avg_vruntime_snapshot(struct cfs_rq *cfs_rq, s64 *avg, long *load)
+{
+	struct sched_entity *curr = cfs_rq->curr;
+
+	*avg = cfs_rq->avg_vruntime;
+	*load = cfs_rq->avg_load;
+
+	if (curr && curr->on_rq) {
+		unsigned long weight = scale_load_down(curr->load.weight);
+
+		*avg += entity_key(cfs_rq, curr) * weight;
+		*load += weight;
+	}
+}
+
 /*
  * Specifically: avg_runtime() + 0 must result in entity_eligible() := true
  * For this to be so, the result of this function must have a left bias.
  */
 u64 avg_vruntime(struct cfs_rq *cfs_rq)
 {
-	struct sched_entity *curr = cfs_rq->curr;
-	s64 avg = cfs_rq->avg_vruntime;
-	long load = cfs_rq->avg_load;
+	s64 avg;
+	long load;
 
-	if (curr && curr->on_rq) {
-		unsigned long weight = scale_load_down(curr->load.weight);
-
-		avg += entity_key(cfs_rq, curr) * weight;
-		load += weight;
-	}
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
 
 	if (load) {
 		/* sign flips effective floor / ceil */
@@ -772,20 +782,19 @@ static void update_entity_lag(struct cfs_rq *cfs_rq, struct sched_entity *se)
  * Note: using 'avg_vruntime() > se->vruntime' is inacurate due
  *       to the loss in precision caused by the division.
  */
+static inline int vruntime_eligible_snapshot(struct cfs_rq *cfs_rq, u64 vruntime,
+					     s64 avg, long load)
+{
+	return avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load;
+}
+
 static int vruntime_eligible(struct cfs_rq *cfs_rq, u64 vruntime)
 {
-	struct sched_entity *curr = cfs_rq->curr;
-	s64 avg = cfs_rq->avg_vruntime;
-	long load = cfs_rq->avg_load;
+	s64 avg;
+	long load;
 
-	if (curr && curr->on_rq) {
-		unsigned long weight = scale_load_down(curr->load.weight);
-
-		avg += entity_key(cfs_rq, curr) * weight;
-		load += weight;
-	}
-
-	return avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load;
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
+	return vruntime_eligible_snapshot(cfs_rq, vruntime, avg, load);
 }
 
 int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se)
@@ -931,6 +940,8 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 	struct sched_entity *se = __pick_first_entity(cfs_rq);
 	struct sched_entity *curr = cfs_rq->curr;
 	struct sched_entity *best = NULL;
+	s64 avg;
+	long load;
 
 	/*
 	 * We can safely skip eligibility check if there is only one entity
@@ -939,7 +950,10 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 	if (cfs_rq->nr_running == 1)
 		return curr && curr->on_rq ? curr : se;
 
-	if (curr && (!curr->on_rq || !entity_eligible(cfs_rq, curr)))
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
+
+	if (curr && (!curr->on_rq ||
+	    !vruntime_eligible_snapshot(cfs_rq, curr->vruntime, avg, load)))
 		curr = NULL;
 
 	/*
@@ -951,7 +965,7 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 		return curr;
 
 	/* Pick the leftmost entity if it's eligible */
-	if (se && entity_eligible(cfs_rq, se)) {
+	if (se && vruntime_eligible_snapshot(cfs_rq, se->vruntime, avg, load)) {
 		best = se;
 		goto found;
 	}
@@ -964,8 +978,8 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 		 * Eligible entities in left subtree are always better
 		 * choices, since they have earlier deadlines.
 		 */
-		if (left && vruntime_eligible(cfs_rq,
-					__node_2_se(left)->min_vruntime)) {
+		if (left && vruntime_eligible_snapshot(cfs_rq,
+				__node_2_se(left)->min_vruntime, avg, load)) {
 			node = left;
 			continue;
 		}
@@ -977,7 +991,7 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice
 		 * entity, so check the current node since it is the one
 		 * with earliest deadline that might be eligible.
 		 */
-		if (entity_eligible(cfs_rq, se)) {
+		if (vruntime_eligible_snapshot(cfs_rq, se->vruntime, avg, load)) {
 			best = se;
 			break;
 		}
