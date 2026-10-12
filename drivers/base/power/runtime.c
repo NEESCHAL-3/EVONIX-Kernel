@@ -496,10 +496,13 @@ static int rpm_idle(struct device *dev, int rpmflags)
 	/* Pending requests need to be canceled. */
 	dev->power.request = RPM_REQ_NONE;
 
+	if (dev->power.no_callbacks)
+		goto out;
+
 	callback = RPM_GET_CALLBACK(dev, runtime_idle);
 
 	/* If no callback assume success. */
-	if (!callback || dev->power.no_callbacks)
+	if (!callback)
 		goto out;
 
 	/* Carry out an asynchronous or a synchronous idle notification. */
