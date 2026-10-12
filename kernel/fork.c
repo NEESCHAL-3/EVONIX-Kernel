@@ -23,6 +23,7 @@
 #include <linux/sched/task.h>
 #include <linux/sched/task_stack.h>
 #include <linux/sched/cputime.h>
+#include <linux/sched/rt.h>
 #include <linux/seq_file.h>
 #include <linux/rtmutex.h>
 #include <linux/init.h>
@@ -2468,7 +2469,10 @@ __latent_entropy struct task_struct *copy_process(
 	memset(&p->rss_stat, 0, sizeof(p->rss_stat));
 #endif
 
-	p->default_timer_slack_ns = current->timer_slack_ns;
+	if (rt_or_dl_task_policy(current))
+		p->default_timer_slack_ns = current->default_timer_slack_ns;
+	else
+		p->default_timer_slack_ns = current->timer_slack_ns;
 
 #ifdef CONFIG_PSI
 	p->psi_flags = 0;
