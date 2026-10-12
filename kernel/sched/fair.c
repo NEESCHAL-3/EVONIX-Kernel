@@ -8073,7 +8073,6 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 	eenv_task_busy_time(&eenv, p, prev_cpu);
 
 	for (; pd; pd = pd->next) {
-		unsigned long util_min = p_util_min, util_max = p_util_max;
 		unsigned long cpu_cap, cpu_thermal_cap, util;
 		long prev_spare_cap = -1, max_spare_cap = -1;
 		unsigned long rq_util_min, rq_util_max;
@@ -8096,6 +8095,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 
 		for_each_cpu(cpu, cpus) {
 			struct rq *rq = cpu_rq(cpu);
+			unsigned long util_min = p_util_min, util_max = p_util_max;
 
 			eenv.pd_cap += cpu_thermal_cap;
 
@@ -8113,7 +8113,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 			 * IOW, placing the task there would make the CPU
 			 * overutilized. Take uclamp into account to see how
 			 * much capacity we can get out of the CPU; this is
-			 * aligned with sched_cpu_util().
+			 * aligned with sched_cpu_util(). Reset the task clamps for
+			 * every CPU so a busy CPU's hints cannot leak into an idle one.
 			 */
 			if (uclamp_is_used() && !uclamp_rq_is_idle(rq)) {
 				/*
