@@ -194,7 +194,7 @@ if grep -Eq '^CONFIG_CC_OPTIMIZE_FOR_(PERFORMANCE_O3|SIZE)=y$' "$CFG"; then
 fi
 
 if grep -Eq '^CONFIG_KSU(_[A-Z0-9_]+)?=[ym]$' "$CFG"; then
-    die "HyperOS Normal unexpectedly contains KernelSU or SUSFS."
+    die "ColorOS Normal unexpectedly contains KernelSU or SUSFS."
 fi
 
 if grep -qx 'CONFIG_RCU_LAZY_DEFAULT_OFF=y' "$CFG"; then
