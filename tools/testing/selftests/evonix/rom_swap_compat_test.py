@@ -46,14 +46,15 @@ class RomSwapCompatibilityTests(unittest.TestCase):
         for option in ("CRYPTO_LZO", "CRYPTO_LZ4", "CRYPTO_ZSTD"):
             self.assertIn(f"\nCONFIG_{option}=y\n", base)
 
-    def test_o3_is_explicit_and_keeps_thinlto(self):
-        self.assertIn("\nCONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y\n", self.config)
-        self.assertNotIn("\nCONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y\n", self.config)
+    def test_o2_is_explicit_and_keeps_thinlto(self):
+        self.assertIn("\nCONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y\n", self.config)
+        self.assertNotIn("\nCONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y\n", self.config)
         self.assertIn("\nCONFIG_LTO_CLANG_THIN=y\n", self.config)
         script = (ROOT / "build-evonix.sh").read_text()
-        for option in ("CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y",
+        for option in ("CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y",
                        "CONFIG_ZRAM=m", "CONFIG_ZSMALLOC=m"):
             self.assertIn(option, script)
+        self.assertIn("PERFORMANCE_O3|SIZE", script)
 
     def test_verifier_reads_image_and_rejects_builtin_swap(self):
         script = (ROOT / "build-evonix.sh").read_text()
