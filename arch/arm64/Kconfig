@@ -442,6 +442,22 @@ config EVONIX_RODIN_SCHED_SLICE_US
 	  Keep stock CPU placement, governors, and thermal policies. Compare
 	  frame-time tails and energy before selecting a release value.
 
+config EVONIX_RODIN_UI_WAKEUP
+	bool "Rodin latency-sensitive EEVDF wakeup preemption"
+	depends on ARM64_TUNE_CORTEX_A725 && SMP
+	depends on FAIR_GROUP_SCHED && UCLAMP_TASK_GROUP
+	help
+	  Allow a waking SCHED_NORMAL task in a latency-sensitive CPU cgroup
+	  to interrupt a non-latency-sensitive task's protected EEVDF request,
+	  but only if the normal eligible-deadline search selects the wakee.
+	  This honors the ROM's cpu.uclamp.latency_sensitive flag; it does not
+	  guess task names, change CPU affinity, boost clocks, or alter weights.
+	  Vendor wakeup hooks retain priority. Other wakeups retain slice
+	  protection, avoiding a global increase in context switching.
+
+	  Disable EVONIX_UI_WAKEUP in sched_features for runtime comparison,
+	  or leave this option disabled to retain the original wakeup policy.
+
 menu "ARM errata workarounds via the alternatives framework"
 
 config AMPERE_ERRATUM_AC03_CPU_38
