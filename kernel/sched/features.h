@@ -96,3 +96,10 @@ SCHED_FEAT(UTIL_EST, true)
 SCHED_FEAT(LATENCY_WARN, false)
 
 SCHED_FEAT(HZ_BW, true)
+
+/* Keep existing feature bit numbers stable for vendor scheduler modules. */
+#ifdef CONFIG_EVONIX_RODIN_UI_WAKEUP
+SCHED_FEAT(EVONIX_UI_WAKEUP, true)
+#else
+SCHED_FEAT(EVONIX_UI_WAKEUP, false)
+#endif
