@@ -8040,12 +8040,12 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 	if (new_cpu != INT_MAX)
 		return new_cpu;
 
-	sync_entity_load_avg(&p->se);
-
 	rcu_read_lock();
 	pd = rcu_dereference(rd->pd);
 	if (!pd || READ_ONCE(rd->overutilized))
 		goto unlock;
+
+	sync_entity_load_avg(&p->se);
 
 	cpu = smp_processor_id();
 	if (sync && cpu_rq(cpu)->nr_running == 1 &&
