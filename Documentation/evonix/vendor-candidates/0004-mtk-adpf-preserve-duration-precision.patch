@@ -5,11 +5,12 @@ unsigned int and multiplies actual duration by 1024 in 32-bit arithmetic.
 At normal frame durations this wraps: equal 16,666,667 ns durations yield
 250 instead of 1024. Negative reports also become unsigned positives.
 
-Keep signed duration precision, reject nonpositive values as before intended,
-and use the existing mul_u64_u64_div_u64 helper for fractional scaling. Saturate
-ratios at SCHED_CAPACITY_SCALE, matching the existing group setter's cap.
-The helper is already in the MediaTek GKI symbol list; no structure or exported
-API changes are required. This remains an UNAPPLIED vendor scheduler candidate.
+Keep signed duration precision and reject nonpositive values.
+Use mul_u64_u64_div_u64 for fractional scaling. Saturate at
+SCHED_CAPACITY_SCALE, matching the existing group setter's cap.
+The helper is already in the MediaTek GKI symbol list. No
+structure or exported API changes are required. This remains
+an UNAPPLIED vendor scheduler candidate.
 
 diff --git a/drivers/misc/mediatek/sched/eas/eas_adpf.c b/drivers/misc/mediatek/sched/eas/eas_adpf.c
 --- a/drivers/misc/mediatek/sched/eas/eas_adpf.c
@@ -42,8 +43,8 @@ diff --git a/drivers/misc/mediatek/sched/eas/eas_adpf.c b/drivers/misc/mediatek/
 +				adpf_ratio = SCHED_CAPACITY_SCALE;
 +			else
 +				adpf_ratio = mul_u64_u64_div_u64(durationNanos,
-+								       SCHED_CAPACITY_SCALE,
-+								       targetDurationNanos);
++								 SCHED_CAPACITY_SCALE,
++								 targetDurationNanos);
  			set_group_active_ratio_cap(GROUP_ID_2, adpf_ratio);
  		} else {
  			set_group_active_ratio_cap(GROUP_ID_2, 0);
