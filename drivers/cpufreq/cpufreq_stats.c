@@ -275,6 +275,11 @@ void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
 		cpufreq_stats_reset_table(stats);
 
 	old_index = stats->last_index;
+	/* Preserve deferred reset handling, but avoid a redundant OPP search. */
+	if (old_index >= 0 && old_index < stats->state_num &&
+	    stats->freq_table[old_index] == new_freq)
+		return;
+
 	new_index = freq_table_get_index(stats, new_freq);
 
 	/* We can't do stats->time_in_state[-1]= .. */
