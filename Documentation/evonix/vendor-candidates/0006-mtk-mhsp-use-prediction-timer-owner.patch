@@ -1,0 +1,22 @@
+Subject: [PATCH] mtk: cpuidle: update the owner of the prediction timer
+
+A prediction timer belongs to a specific governor instance. Selecting
+the instance with this_cpu_ptr() instead of the timer pointer can update
+another CPU's history if a pending timer migrates during CPU offlining.
+
+Derive the owner from the timer. This preserves normal pinned callbacks,
+prediction thresholds, latency QoS, firmware idle states and IPI handling.
+This targets the MHSP vendor module, not the common kernel boot image.
+
+diff --git a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+--- a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
++++ b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+@@ -227,7 +227,7 @@
+ static enum hrtimer_restart histtimer_fn(struct hrtimer *h)
+ {
+-	struct gov_info *gov = this_cpu_ptr(&gov_infos);
++	struct gov_info *gov = container_of(h, struct gov_info, shallow.histtimer);
+ 
+ 	if (gov->shallow.timer_need_cancel)
+ 		gov->shallow.timer_need_cancel = false;
+ 	else
