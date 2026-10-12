@@ -50,6 +50,9 @@ class NoHzRcu(unittest.TestCase):
                 body = body.replace(line, "")
             body = body.replace("rcu_dereference_sched(", "rcu_dereference(")
             body = body.replace("goto unlock;", "goto out;")
+            # Request accumulation is independently checked by the flags suite.
+            body = body.replace("flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;",
+                                "flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;")
             return re.sub(r"\s+", "", body)
 
         self.assertEqual(normalize(new), normalize(old))
