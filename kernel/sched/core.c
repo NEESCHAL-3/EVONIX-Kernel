@@ -1788,6 +1788,7 @@ static inline void
 uclamp_update_active(struct task_struct *p)
 {
 	enum uclamp_id clamp_id;
+	unsigned int min_util, max_util;
 	struct rq_flags rf;
 	struct rq *rq;
 
@@ -1800,6 +1801,8 @@ uclamp_update_active(struct task_struct *p)
 	 * This is the same locking schema used by __set_cpus_allowed_ptr().
 	 */
 	rq = task_rq_lock(p, &rf);
+	min_util = uclamp_rq_get(rq, UCLAMP_MIN);
+	max_util = uclamp_rq_get(rq, UCLAMP_MAX);
 
 	/*
 	 * Setting the clamp bucket is serialized by task_rq_lock().
@@ -1809,6 +1812,13 @@ uclamp_update_active(struct task_struct *p)
 	 */
 	for_each_clamp_id(clamp_id)
 		uclamp_rq_reinc_id(rq, p, clamp_id);
+
+	/* Notify the installed governor only when the rq's effective hints change. */
+	if (min_util != uclamp_rq_get(rq, UCLAMP_MIN) ||
+	    max_util != uclamp_rq_get(rq, UCLAMP_MAX)) {
+		update_rq_clock(rq);
+		cpufreq_update_util(rq, 0);
+	}
 
 	task_rq_unlock(rq, p, &rf);
 }
