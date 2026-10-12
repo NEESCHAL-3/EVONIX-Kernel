@@ -80,6 +80,23 @@ class SnapshotFixtures(unittest.TestCase):
         self.assertIn("[unavailable]", result.stdout)
         self.assertNotIn("/system_stat", result.stdout)
 
+    def test_wakeup_class_statistics_work_without_debugfs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            node = root / "sys/class/wakeup/wakeup0"
+            node.mkdir(parents=True)
+            values = {"name": "fixture-wlan\n", "event_count": "42\n",
+                      "wakeup_count": "7\n", "active_time_ms": "0\n",
+                      "total_time_ms": "125\n"}
+            for attr, value in values.items():
+                (node / attr).write_text(value)
+            result = self.run_snapshot(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for attr, value in values.items():
+                self.assertIn(f"@@ /sys/class/wakeup/wakeup0/{attr}\n{value.strip()}", result.stdout)
+                self.assertEqual((node / attr).read_text(), value)
+            self.assertNotIn("@@ /sys/power/wakeup_count", result.stdout)
+
     def test_fixture_preserves_values_without_writing_controls(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

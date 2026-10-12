@@ -45,6 +45,22 @@ read_node /proc/version
 read_node /sys/kernel/wakeup_reasons/last_resume_reason
 read_node /sys/kernel/wakeup_reasons/last_suspend_time
 read_node /sys/kernel/debug/wakeup_sources
+# The wakeup class remains useful when debugfs is unavailable. These attribute
+# handlers only report statistics; unlike /sys/power/wakeup_count they do not
+# wait for wake sources to relax. Bound enumeration and each individual read.
+sample_wake_sources=0
+for sample_wake in "$sample_root"/sys/class/wakeup/wakeup*; do
+	[ -d "$sample_wake" ] || continue
+	sample_wake_sources=$((sample_wake_sources + 1))
+	if [ "$sample_wake_sources" -gt 128 ]; then
+		printf '\n@@ wakeup_class_limit\n[truncated at 128 sources]\n'
+		break
+	fi
+	for sample_attr in name active_count event_count wakeup_count \
+			active_time_ms total_time_ms prevent_suspend_time_ms; do
+		read_node "${sample_wake#"$sample_root"}/$sample_attr"
+	done
+done
 # Do not read /sys/power/wakeup_count: its show handler may wait for active
 # wake sources to relax. Observe the debug counters instead.
 read_node /sys/power/state
