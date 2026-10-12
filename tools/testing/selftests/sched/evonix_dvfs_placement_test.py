@@ -229,6 +229,15 @@ static bool cpumask_test_cpu(int cpu, struct cpumask *mask)
     return mask->bits & (1U << cpu);
 }
 #define CPU_NEWLY_IDLE 2
+#define CPU_NOT_IDLE 0
+#define SD_ASYM_CPUCAPACITY 1
+enum migration_type { migrate_load, migrate_util, migrate_task, migrate_misfit };
+#define sysctl_sched_migration_cost 500000UL
+#define capacity_of(cpu) ((void)(cpu), 1024UL)
+#define capacity_greater(a, b) ((a) * 1024 > (b) * 1078)
+#define available_idle_cpu(cpu) ((void)(cpu), false)
+#define task_fits_cpu(p, cpu) ((void)(p), (void)(cpu), true)
+#define sched_core_cookie_match(rq, p) ((void)(rq), (void)(p), true)
 #define LBF_DST_PINNED 1
 #define LBF_ACTIVE_LB 2
 #define LBF_SOME_PINNED 4
@@ -245,10 +254,14 @@ struct task_struct {
         int nr_forced_migrations, nr_failed_migrations_hot;
     } stats;
 };
-struct sched_domain { int nr_balance_failed, cache_nice_tries, lb_hot_gained[3]; };
+struct sched_domain {
+    int nr_balance_failed, cache_nice_tries, lb_hot_gained[3];
+    unsigned int flags;
+};
 struct lb_env {
-    struct rq *src_rq;
+    struct rq *src_rq, *dst_rq;
     struct sched_domain *sd;
+    enum migration_type migration_type;
     int src_cpu, dst_cpu, idle, new_dst_cpu;
     unsigned int flags;
     struct cpumask *dst_grpmask, *cpus;
