@@ -5659,7 +5659,7 @@ check_abort:
 		if (should_abort_scan(lruvec, sc))
 			break;
 
-		cond_resched();
+		cond_resched_tasks_rcu_qs();
 	}
 
 	/*
