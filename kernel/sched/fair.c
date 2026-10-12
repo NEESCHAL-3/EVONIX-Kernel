@@ -1028,6 +1028,31 @@ int sched_update_scaling(void)
 
 static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
 
+static inline bool did_preempt_short(struct cfs_rq *cfs_rq,
+				     struct sched_entity *curr)
+{
+	if (!sched_feat(PREEMPT_SHORT))
+		return false;
+
+	if (curr->vlag == curr->deadline)
+		return false;
+
+	return !entity_eligible(cfs_rq, curr);
+}
+
+static inline bool do_preempt_short(struct cfs_rq *cfs_rq,
+				    struct sched_entity *pse,
+				    struct sched_entity *se)
+{
+	if (!sched_feat(PREEMPT_SHORT) || pse->slice >= se->slice)
+		return false;
+
+	if (!entity_eligible(cfs_rq, pse))
+		return false;
+
+	return entity_before(pse, se) || !entity_eligible(cfs_rq, se);
+}
+
 /* Size requests without changing entity weights or group-level fairness. */
 static u64 evonix_entity_slice(struct sched_entity *se)
 {
@@ -1052,12 +1077,16 @@ static u64 evonix_entity_slice(struct sched_entity *se)
 static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	bool skip_preempt = false;
+	bool expired;
 
 	trace_android_rvh_update_deadline(cfs_rq, se, &skip_preempt);
 	if (skip_preempt)
 		return;
 
-	if ((s64)(se->vruntime - se->deadline) < 0)
+	expired = (s64)(se->vruntime - se->deadline) >= 0;
+
+	/* A preempted request must also yield once its entity is ineligible. */
+	if (!expired && (cfs_rq->nr_running < 2 || !did_preempt_short(cfs_rq, se)))
 		return;
 
 	/*
@@ -1065,15 +1094,16 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * nice) while the request time r_i is determined by
 	 * sysctl_sched_base_slice.
 	 */
-	se->slice = evonix_entity_slice(se);
+	if (expired) {
+		se->slice = evonix_entity_slice(se);
+
+		/* EEVDF: vd_i = ve_i + r_i / w_i */
+		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+	}
 
 	/*
-	 * EEVDF: vd_i = ve_i + r_i / w_i
-	 */
-	se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
-
-	/*
-	 * The task has consumed its request, reschedule.
+	 * Renewed or unprotected-ineligible requests need another selection.
+	 * Count fair entities, not RT/DL tasks on the physical runqueue.
 	 */
 	if (cfs_rq->nr_running > 1) {
 		trace_android_vh_resched_curr_lazy(rq_of(cfs_rq), &skip_preempt);
@@ -8494,7 +8524,8 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	 * before a background entity finishes its protected request. Keep
 	 * eligibility, group weights and the vendor's decision unchanged.
 	 */
-	protect_slice = !evonix_ui_wakeup(p, curr);
+	protect_slice = !(evonix_ui_wakeup(p, curr) ||
+			  do_preempt_short(cfs_rq, pse, se));
 	if (pick_eevdf(cfs_rq, protect_slice) == pse)
 		goto preempt;
 
@@ -8511,8 +8542,10 @@ preempt:
 	 * after selecting the wakee and after the vendor permits rescheduling,
 	 * otherwise the next pick would immediately select current again.
 	 */
-	if (!protect_slice)
+	if (!protect_slice) {
 		se->vlag = 0;
+		clear_buddies(cfs_rq, se);
+	}
 
 	resched_curr(rq);
 }
