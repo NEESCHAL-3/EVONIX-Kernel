@@ -203,8 +203,16 @@ void cpufreq_times_record_transition(struct cpufreq_policy *policy,
 	unsigned int new_freq)
 {
 	int index;
+	unsigned int last_index;
 	struct cpu_freqs *freqs = all_freqs[policy->cpu];
 	if (!freqs)
+		return;
+
+	/* Forced governor updates may report the same hardware OPP again. */
+	last_index = READ_ONCE(freqs->last_index);
+	if (policy->freq_table_sorted != CPUFREQ_TABLE_UNSORTED &&
+	    last_index < freqs->max_state &&
+	    freqs->freq_table[last_index] == new_freq)
 		return;
 
 	index = cpufreq_times_get_index(freqs, new_freq);
