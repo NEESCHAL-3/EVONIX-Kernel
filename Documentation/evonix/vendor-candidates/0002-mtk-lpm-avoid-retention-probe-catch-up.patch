@@ -1,0 +1,37 @@
+Subject: [PATCH] mtk: lpm: schedule failed retention probes from current time
+
+The retention readiness probe is a retry, not a periodic accounting deadline.
+Rearming by adding the interval to the old expiry can leave it in the past
+after a delayed callback, causing immediate catch-up probes until it catches
+up with jiffies. Schedule the next attempt from the current jiffies instead.
+
+Keep the per-CPU target, firmware readiness test, device-tree interval and
+successful-probe termination unchanged. Do not make this timer deferrable:
+that could postpone enabling CPU retention on an otherwise idle CPU.
+
+This targets the published MTK_kernel_device_modules platform/v2 source.
+It is an UNAPPLIED vendor candidate, not active in the common EVONIX kernel.
+Confirm the deployed platform version and hotplug/suspend behavior before
+building or packaging its module.
+
+diff --git a/drivers/misc/mediatek/lpm/modules/platform/v2/lpm_plat_apmcu.c b/drivers/misc/mediatek/lpm/modules/platform/v2/lpm_plat_apmcu.c
+--- a/drivers/misc/mediatek/lpm/modules/platform/v2/lpm_plat_apmcu.c
++++ b/drivers/misc/mediatek/lpm/modules/platform/v2/lpm_plat_apmcu.c
+@@ -192,7 +192,7 @@
+ 	unsigned int cur_cpu = smp_processor_id();
+ 
+ 	if (cur_cpu != crtd->cpu) {
+-		crtd->ret_timer.expires += ((unsigned long)cpu_ret_check_interval);
++		crtd->ret_timer.expires = jiffies + cpu_ret_check_interval;
+ 		add_timer_on(&crtd->ret_timer, crtd->cpu);
+ 		return;
+ 	}
+@@ -203,7 +203,7 @@
+ 		crtd->ret_ready = 1;
+ 		del_timer(&crtd->ret_timer);
+ 	} else if (!timer_pending(&crtd->ret_timer)) {
+-		crtd->ret_timer.expires += ((unsigned long)cpu_ret_check_interval);
++		crtd->ret_timer.expires = jiffies + cpu_ret_check_interval;
+ 		add_timer_on(&crtd->ret_timer, cur_cpu);
+ 	}
+ 	pr_info("[name:cpu_pm&] cpu_ret_check\n");
