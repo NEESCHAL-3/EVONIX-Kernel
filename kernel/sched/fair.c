@@ -11385,8 +11385,6 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			break;
 
 		case migrate_util:
-			util = cpu_util_cfs_boost(i);
-
 			/*
 			 * Don't try to pull utilization from a CPU with one
 			 * running task. Whatever its utilization, we will fail
@@ -11394,6 +11392,8 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			 */
 			if (nr_running <= 1)
 				continue;
+
+			util = cpu_util_cfs_boost(i);
 
 			if (busiest_util < util) {
 				busiest_util = util;
