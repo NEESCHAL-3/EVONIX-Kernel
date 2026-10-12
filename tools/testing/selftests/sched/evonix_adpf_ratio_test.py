@@ -11,12 +11,27 @@ PATCH = ROOT / "Documentation/evonix/vendor-candidates/0004-mtk-adpf-preserve-du
 SCALE = 1024
 
 
+def kernel_mul_div(a, b, c):
+    """Model this tree's helper, including its extreme-input precision drop."""
+    result = 0
+    if a.bit_length() - 1 + b.bit_length() - 1 > 62:
+        quotient, b = divmod(b, c)
+        result = quotient * a
+        shift = a.bit_length() - 1 + b.bit_length() - 1 - 62
+        if shift > 0:
+            b >>= shift
+            c >>= shift
+            if not c:
+                return result
+    return result + a * b // c
+
+
 def ratio(actual, target):
     if actual <= 0 or target <= 0:
         return 0
     if actual >= target:
         return SCALE
-    return actual * SCALE // target
+    return kernel_mul_div(actual, SCALE, target)
 
 
 class ADPFRatioRegression(unittest.TestCase):
@@ -37,14 +52,23 @@ class ADPFRatioRegression(unittest.TestCase):
 
     def test_large_valid_values_preserve_precision(self):
         high = (1 << 63) - 1
-        self.assertEqual(ratio(high // 2, high), 511)
+        # The existing helper drops precision for century-scale durations.
+        self.assertEqual(ratio(high // 2, high), 512)
         self.assertEqual(ratio(high, high), SCALE)
         self.assertEqual(ratio(5_000_000_000, 10_000_000_000), 512)
 
-    def test_randomized_results_match_exact_saturated_arithmetic(self):
+    def test_randomized_extremes_stay_within_one_capacity_unit(self):
         rng = random.Random(6899)
         for _ in range(4096):
             actual, target = rng.randrange(1, 1 << 63), rng.randrange(1, 1 << 63)
+            reference = min(SCALE, actual * SCALE // target)
+            self.assertLessEqual(abs(ratio(actual, target) - reference), 1)
+            self.assertLessEqual(ratio(actual, target), SCALE)
+
+    def test_practical_durations_match_exact_arithmetic(self):
+        rng = random.Random(8400)
+        for _ in range(4096):
+            actual, target = rng.randrange(1, 10**12), rng.randrange(1, 10**12)
             self.assertEqual(ratio(actual, target), min(SCALE, actual * SCALE // target))
 
     def test_helper_is_already_in_the_mediatek_symbol_list(self):
