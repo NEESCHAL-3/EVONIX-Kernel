@@ -8066,7 +8066,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 
 	target = prev_cpu;
 
-	sync_entity_load_avg(&p->se);
+	/* The task's PELT state was synchronized before the fit checks above. */
 	if (!task_util_est(p) && p_util_min == 0)
 		goto unlock;
 
