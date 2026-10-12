@@ -10319,9 +10319,15 @@ static bool update_sd_pick_busiest(struct lb_env *env,
 	 * per-CPU capacity. Migrating tasks to less capable CPUs may harm
 	 * throughput. Maximize throughput, power/energy consequences are not
 	 * considered.
+	 *
+	 * Check the actual fair-task count too: EAS/uclamp or a vendor's
+	 * overutilization policy can classify a group with queued work as
+	 * fully busy rather than overloaded. Do not strand those tasks on
+	 * a faster CPU while excluding idle, lower-capacity destinations.
 	 */
 	if ((env->sd->flags & SD_ASYM_CPUCAPACITY) &&
 	    (sgs->group_type <= group_fully_busy) &&
+	    (sgs->sum_h_nr_running <= sgs->group_weight) &&
 	    (capacity_greater(sg->sgc->min_capacity, capacity_of(env->dst_cpu))))
 		return false;
 
