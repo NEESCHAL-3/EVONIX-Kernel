@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[4]
-BEFORE = "230b17d73"
+BEFORE = "cf4438d00878a567542eb30c112a8865965898b3"
 RUNTIME = (ROOT / "drivers/base/power/runtime.c").read_text()
 
 

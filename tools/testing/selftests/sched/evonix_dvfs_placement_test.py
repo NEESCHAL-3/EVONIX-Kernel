@@ -12,7 +12,7 @@ import unittest
 from evonix_policy_test import function as extract_function
 
 ROOT = Path(__file__).resolve().parents[4]
-BASELINE = "124640734"
+BASELINE = "3ca60c06e096537401948ae62dc971f7034604fa"
 
 
 def source(path, baseline=False):

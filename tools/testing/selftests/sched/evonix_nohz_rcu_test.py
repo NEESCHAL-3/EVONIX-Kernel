@@ -9,7 +9,7 @@ import unittest
 from evonix_policy_test import ROOT, function
 
 
-BEFORE = "9d7373344"
+BEFORE = "2c192eb44659995c4ca5dd9a91fa22d1c05a157a"
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 CORE = (ROOT / "kernel/sched/core.c").read_text()
 

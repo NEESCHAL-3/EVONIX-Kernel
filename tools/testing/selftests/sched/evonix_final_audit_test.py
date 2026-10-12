@@ -11,7 +11,7 @@ import unittest
 from evonix_policy_test import function as raw_function
 
 ROOT = Path(__file__).resolve().parents[4]
-BASE = "8872be025"
+BASE = "ae8b233ded9a84e5a458b034713fc7f59009c9df"
 
 
 def function(text, name):
@@ -193,7 +193,13 @@ class LifetimeContracts(unittest.TestCase):
         for path in ("arch/arm64/configs/evonix.config",
                      "arch/arm64/configs/gki_defconfig", "android/abi_gki_aarch64",
                      "build.config.constants", "Makefile"):
-            self.assertEqual(source(path, True), source(path), path)
+            before, after = source(path, True), source(path)
+            if path.endswith(("evonix.config", "gki_defconfig")):
+                # Release comments are metadata, not configuration or KMI inputs.
+                pattern = r"(?m)^(?:CONFIG_[A-Z0-9_]+=.*|# CONFIG_[A-Z0-9_]+ is not set)$"
+                before = re.findall(pattern, before)
+                after = re.findall(pattern, after)
+            self.assertEqual(before, after, path)
 
 
 class NetworkBoundsC(unittest.TestCase):
