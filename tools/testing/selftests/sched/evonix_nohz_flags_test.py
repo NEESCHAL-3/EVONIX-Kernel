@@ -8,7 +8,7 @@ import unittest
 from evonix_policy_test import ROOT, function
 
 
-BEFORE = "9f2fdf49d"
+BEFORE = "fb659dd35fe3e518ebbe3701deb4bd767396e0a5"
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 BALANCE, STATS, NEXT = 1, 2, 8
 REQUEST_MASK = BALANCE | STATS | NEXT

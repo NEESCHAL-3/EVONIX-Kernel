@@ -11,7 +11,7 @@ import unittest
 from evonix_policy_test import function as raw_function
 
 ROOT = Path(__file__).resolve().parents[4]
-BASE = "8872be025"
+BASE = "8bb34e666788a805a6311d67f2c1f3a230709634"
 
 
 def function(text, name):

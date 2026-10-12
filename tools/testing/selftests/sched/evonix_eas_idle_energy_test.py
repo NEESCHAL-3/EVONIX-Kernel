@@ -10,7 +10,7 @@ import unittest
 from evonix_policy_test import ROOT, function as extract_function
 
 
-BEFORE = "230b17d73"
+BEFORE = "7395d2daf2ef1aac738c561a77b55276af751d1d"
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 EM = (ROOT / "include/linux/energy_model.h").read_text()
 

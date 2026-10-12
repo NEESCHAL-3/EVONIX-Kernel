@@ -17,7 +17,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[4]
-BASELINE = "515d72e92"
+BASELINE = "1ff4dce98759dcd72033d0b3b4c112260accd8d9"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evonix"))
 from stable_backports_test import function  # noqa: E402
 
