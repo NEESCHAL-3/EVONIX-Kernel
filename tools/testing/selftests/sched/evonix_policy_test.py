@@ -242,7 +242,7 @@ class SourceContracts(unittest.TestCase):
         self.assertIn("READ_ONCE(task_group(p)->latency_sensitive)", body)
         self.assertIn("!READ_ONCE(task_group(curr)->latency_sensitive)", body)
         self.assertNotIn("comm", body)
-        self.assertIn("WRITE_ONCE(tg->latency_sensitive, (unsigned int) ls);", CORE)
+        self.assertIn("WRITE_ONCE(tg->latency_sensitive, (unsigned int)ls);", CORE)
         self.assertIn("if (ls > 1)", function(CORE, "cpu_uclamp_ls_write_u64"))
 
     def test_feature_is_appended_and_has_disabled_config_path(self):
