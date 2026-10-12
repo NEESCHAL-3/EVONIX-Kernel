@@ -12107,6 +12107,9 @@ static void nohz_balancer_kick(struct rq *rq)
 	unsigned int flags = 0;
 	int done = 0;
 
+	/* The scheduler tick's IRQ-disabled context also protects RCU readers. */
+	lockdep_assert_irqs_disabled();
+
 	if (unlikely(rq->idle_balance))
 		return;
 
@@ -12139,9 +12142,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		goto out;
 	}
 
-	rcu_read_lock();
-
-	sd = rcu_dereference(rq->sd);
+	sd = rcu_dereference_sched(rq->sd);
 	if (sd) {
 		/*
 		 * If there's a CFS task and the current CPU has reduced
@@ -12150,11 +12151,11 @@ static void nohz_balancer_kick(struct rq *rq)
 		 */
 		if (rq->cfs.h_nr_running >= 1 && check_cpu_capacity(rq, sd)) {
 			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			goto out;
 		}
 	}
 
-	sd = rcu_dereference(per_cpu(sd_asym_packing, cpu));
+	sd = rcu_dereference_sched(per_cpu(sd_asym_packing, cpu));
 	if (sd) {
 		/*
 		 * When ASYM_PACKING; see if there's a more preferred CPU
@@ -12168,12 +12169,12 @@ static void nohz_balancer_kick(struct rq *rq)
 			if (sched_use_asym_prio(sd, i) &&
 			    sched_asym_prefer(i, cpu)) {
 				flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-				goto unlock;
+				goto out;
 			}
 		}
 	}
 
-	sd = rcu_dereference(per_cpu(sd_asym_cpucapacity, cpu));
+	sd = rcu_dereference_sched(per_cpu(sd_asym_cpucapacity, cpu));
 	if (sd) {
 		/*
 		 * When ASYM_CPUCAPACITY; see if there's a higher capacity CPU
@@ -12181,7 +12182,7 @@ static void nohz_balancer_kick(struct rq *rq)
 		 */
 		if (check_misfit_status(rq, sd)) {
 			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			goto out;
 		}
 
 		/*
@@ -12191,10 +12192,10 @@ static void nohz_balancer_kick(struct rq *rq)
 		 *
 		 * Skip the LLC logic because it's not relevant in that case.
 		 */
-		goto unlock;
+		goto out;
 	}
 
-	sds = rcu_dereference(per_cpu(sd_llc_shared, cpu));
+	sds = rcu_dereference_sched(per_cpu(sd_llc_shared, cpu));
 	if (sds) {
 		/*
 		 * If there is an imbalance between LLC domains (IOW we could
@@ -12208,11 +12209,9 @@ static void nohz_balancer_kick(struct rq *rq)
 		nr_busy = atomic_read(&sds->nr_busy_cpus);
 		if (nr_busy > 1) {
 			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			goto out;
 		}
 	}
-unlock:
-	rcu_read_unlock();
 out:
 	if (READ_ONCE(nohz.needs_update))
 		flags |= NOHZ_NEXT_KICK;
