@@ -55,6 +55,8 @@ class PreemptShort(unittest.TestCase):
                                            resched_veto=True), (expired, False))
         body = function(FAIR, "update_deadline")
         self.assertLess(body.index("if (skip_preempt)"), body.index("did_preempt_short("))
+        self.assertLess(body.index("trace_android_rvh_update_deadline"),
+                        body.index("expired = (s64)"))
         self.assertLess(body.index("trace_android_vh_resched_curr_lazy"),
                         body.index("resched_curr(rq_of(cfs_rq));"))
 
