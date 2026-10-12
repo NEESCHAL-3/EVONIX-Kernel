@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class RomSwapCompatibilityTests(unittest.TestCase):
+    def test_normal_configuration_and_image_verifier_reject_root_support(self):
+        self.assertIn("# CONFIG_KSU is not set", self.config)
+        self.assertIn("# CONFIG_KSU_SUSFS is not set", self.config)
+        self.assertNotRegex(self.config, r"(?m)^CONFIG_KSU(?:_[A-Z0-9_]+)?=[ym]$")
+        script = (ROOT / "build-evonix.sh").read_text()
+        self.assertIn("^CONFIG_KSU(_[A-Z0-9_]+)?=[ym]$", script)
+
     @classmethod
     def setUpClass(cls):
         cls.modules = {}
