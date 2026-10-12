@@ -1,0 +1,26 @@
+Subject: [PATCH] mtk: cpuidle: handle WFI-only remedy history without division
+
+A full history buffer need not contain a non-WFI state. For example,
+latency QoS can keep a CPU in WFI while its measured idle duration is
+longer than the hidden-state threshold. Then nsamp is full and cnt is
+zero, but total_cnt is also zero. The remedy-off branch divides by zero.
+
+When there are no deep-state samples, return no remedy prediction. The
+existing timer and latency-QoS state selection still applies. Preserve
+the ratios, thresholds and decisions for all histories with samples.
+
+This targets the Rodin vendor MHSP module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+--- a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
++++ b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+@@ -403,6 +403,9 @@
+ 			gov->predict_info |= PREDICT_ERR_REMEDY_THRES;
+ 		}
+ 	} else {
++		if (!gov->remedy.total_cnt)
++			return 0;
++
+ 		threshold = div_u64((gov->remedy.match_cnt * 100),
+ 				    gov->remedy.total_cnt);
+ 		gov->predict_info |= PREDICT_ERR_REMEDY_OFF_TIMES;
