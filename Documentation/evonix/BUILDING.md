@@ -72,4 +72,3 @@ feature configuration and rejects active Phoenix watchdog/recovery modes.
 
 Normal remains root-free. The KernelSU variant uses Next v3.4.1 and SUSFS v2.3.0.
 The permissive ColorOS branch is not part of this update.
-
