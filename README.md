@@ -1,5 +1,7 @@
 # EVONIX Kernel
 
+![EVONIX V4.5 — HyperOS and ColorOS](Documentation/evonix/media/evonix-v4.5.png)
+
 EVONIX is an Android 15 / Linux 6.6.142 kernel for Poco X7 Pro (`rodin`).
 V4.5 provides separate HyperOS and ColorOS builds, with either
 KernelSU Next + SUSFS or no built-in root.
