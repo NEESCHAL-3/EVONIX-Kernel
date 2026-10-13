@@ -1,4 +1,4 @@
-# Building EVONIX V4.0
+# Building EVONIX V4.5
 
 ## Workspace
 
@@ -32,11 +32,10 @@ bootstrap identity, not the selected kernel compiler.
 
 ```bash
 cd common
-EVONIX_JOBS=8 bash build-evonix.sh ../out/evonix-v4.0
+EVONIX_JOBS=8 bash build-evonix.sh ../out/evonix-v4.5
 ```
 
-The current candidate selects O3 for C and the ThinLTO link step. This is an
-optimization choice, not proof of faster workloads or lower power consumption.
+V4.5 uses O2 with ThinLTO and AutoFDO.
 The script validates the compiler, ThinLTO, selected defaults and the bundled
 AutoFDO profile before invoking Kleaf. Eight jobs are a starting point,
 not a requirement for every host; reduce this on memory-constrained machines.
@@ -49,11 +48,14 @@ Confirm SELinux enforcement configuration, the correct KSU/Normal selection,
 and absence of accidental permissive options. Keep generated artifacts outside Git.
 
 The distribution includes kernel images, symbols, ABI data and SBOM outputs.
-A boot-only release ZIP does not install rebuilt vendor modules. This arm64
-candidate builds zRAM and ZSMALLOC into Image; no replacement compressed-swap
-modules or writes to the ROM's DLKM partitions are required by this build.
-Verify `CONFIG_ZRAM=y`, `CONFIG_ZSMALLOC=y` and their entries in `modules.builtin`.
-The final boot test must check swap setup and the ROM's module-loader behavior.
+A boot-only release ZIP does not install rebuilt vendor modules. Keep zRAM and
+ZSMALLOC modular (`CONFIG_ZRAM=m`, `CONFIG_ZSMALLOC=m`) and absent from
+`modules.builtin`; the ROM continues loading its existing modules. Do not add
+replacement `.ko` files or DLKM images to the ZIP. Module-only source fixes are
+not delivered by this Image-only package.
+
+The build verifier reads the delivered Image's embedded configuration and
+rejects built-in swap drivers that conflict with the ROM's existing modules.
 
 Before device testing, retain a known-good boot image and recovery path.
 Record ROM, slot, branch commit, Image checksum and actual runtime results.
