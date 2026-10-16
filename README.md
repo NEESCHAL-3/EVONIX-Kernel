@@ -1,20 +1,25 @@
 # EVONIX Kernel
 
+![EVONIX V4.5 — HyperOS and ColorOS](Documentation/evonix/media/evonix-v4.5.png)
+
 EVONIX is an Android 15 / Linux 6.6.142 kernel for Poco X7 Pro (`rodin`).
-V4.0 provides separate enforcing HyperOS and ColorOS builds, with either
+V4.5 provides separate HyperOS and ColorOS builds, with either
 KernelSU Next + SUSFS or no built-in root.
 
-## V4.0
+## V4.5
 
-- Cortex-A725 instruction scheduling with the existing arm64 ISA.
-- Rodin EEVDF base slice of 500 microseconds; stock frequency governors retained.
-- Power-efficient eligible workqueues, lazy RCU callbacks and deferrable KFENCE.
-- Shared OEM charge-pause backend replacing the previous bypass implementation.
-- Baseband-guard partition-write filtering with policy-aware credential tracking.
-- KernelSU Next v3.4.0 and SUSFS v2.3.0 in KSU variants.
-- Existing BBRv3/FQ and Kyber support retained.
+- Latency-sensitive scheduling, PREEMPT_SHORT and EAS placement improvements.
+- Reduced CPUFreq accounting, CPU-selection and load-balancing overhead.
+- Memory reclaim, suspend, swap readahead and filesystem fixes.
+- Reduced redundant power-management and deferred-buffer worker activity.
+- Native OPlus SchedAssist, FrameBoost and memory integration for ColorOS.
+- Shared OEM bypass-charging support for HyperOS and ColorOS.
+- KernelSU Next v3.4.1 with SUSFS v2.3.0 in KSU variants.
 
-See [CHANGELOG.md](CHANGELOG.md) for changes and validation scope.
+See [CHANGELOG.md](CHANGELOG.md) for the full changelog.
+
+[Download V4.5](https://github.com/NEESCHAL-3/EVONIX-Kernel/releases/tag/v4.5)
+and follow the [installation guide](Documentation/evonix/INSTALLATION.md).
 
 ## Choose your build
 
@@ -26,7 +31,7 @@ See [CHANGELOG.md](CHANGELOG.md) for changes and validation scope.
 | ColorOS port | None | `coloros/normal` |
 
 The default branch is `hyperos/ksu-susfs`. The permissive branch is excluded
-from V4.0 and was not updated.
+from V4.5 and was not updated.
 
 ## Build and integration
 
@@ -41,7 +46,7 @@ interfaces and measurement limits are documented in
 [BYPASS_CHARGING.md](Documentation/evonix/BYPASS_CHARGING.md).
 Charging policy restoration is a userspace responsibility.
 
-## Security and testing
+## Security
 
 The four release branches enforce SELinux. Inherited vendor-module
 version-check relaxation remains a security and compatibility limitation;

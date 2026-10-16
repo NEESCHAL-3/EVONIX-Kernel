@@ -5594,6 +5594,10 @@ static bool should_abort_scan(struct lruvec *lruvec, struct scan_control *sc)
 #ifdef CONFIG_ANDROID_VENDOR_OEM_DATA
 	trace_android_vh_mglru_should_abort_scan(&sc->android_vendor_data1, &bypass);
 #endif
+	/* Cancellation also applies to proactive memcg reclaim. */
+	if (unlikely(sc->proactive && signal_pending(current)))
+		return true;
+
 	/* don't abort memcg reclaim to ensure fairness */
 	if (!root_reclaim(sc) && !bypass)
 		return false;
@@ -5655,7 +5659,7 @@ check_abort:
 		if (should_abort_scan(lruvec, sc))
 			break;
 
-		cond_resched();
+		cond_resched_tasks_rcu_qs();
 	}
 
 	/*
@@ -6601,7 +6605,7 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 			}
 		}
 
-		cond_resched();
+		cond_resched_tasks_rcu_qs();
 
 		if (nr_reclaimed < nr_to_reclaim || proportional_reclaim)
 			continue;

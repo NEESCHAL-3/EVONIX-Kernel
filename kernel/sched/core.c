@@ -1788,6 +1788,7 @@ static inline void
 uclamp_update_active(struct task_struct *p)
 {
 	enum uclamp_id clamp_id;
+	unsigned int min_util, max_util;
 	struct rq_flags rf;
 	struct rq *rq;
 
@@ -1800,6 +1801,8 @@ uclamp_update_active(struct task_struct *p)
 	 * This is the same locking schema used by __set_cpus_allowed_ptr().
 	 */
 	rq = task_rq_lock(p, &rf);
+	min_util = uclamp_rq_get(rq, UCLAMP_MIN);
+	max_util = uclamp_rq_get(rq, UCLAMP_MAX);
 
 	/*
 	 * Setting the clamp bucket is serialized by task_rq_lock().
@@ -1809,6 +1812,13 @@ uclamp_update_active(struct task_struct *p)
 	 */
 	for_each_clamp_id(clamp_id)
 		uclamp_rq_reinc_id(rq, p, clamp_id);
+
+	/* Notify the installed governor only when the rq's effective hints change. */
+	if (min_util != uclamp_rq_get(rq, UCLAMP_MIN) ||
+	    max_util != uclamp_rq_get(rq, UCLAMP_MAX)) {
+		update_rq_clock(rq);
+		cpufreq_update_util(rq, 0);
+	}
 
 	task_rq_unlock(rq, p, &rf);
 }
@@ -4921,6 +4931,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
+			p->timer_slack_ns = p->default_timer_slack_ns;
 		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
 
@@ -11106,7 +11117,7 @@ static int cpu_uclamp_ls_write_u64(struct cgroup_subsys_state *css,
 	if (ls > 1)
 		return -EINVAL;
 	tg = css_tg(css);
-	tg->latency_sensitive = (unsigned int) ls;
+	WRITE_ONCE(tg->latency_sensitive, (unsigned int)ls);
 
 	return 0;
 }
@@ -11116,7 +11127,7 @@ static u64 cpu_uclamp_ls_read_u64(struct cgroup_subsys_state *css,
 {
 	struct task_group *tg = css_tg(css);
 
-	return (u64) tg->latency_sensitive;
+	return (u64)READ_ONCE(tg->latency_sensitive);
 }
 #endif /* CONFIG_UCLAMP_TASK_GROUP */
 

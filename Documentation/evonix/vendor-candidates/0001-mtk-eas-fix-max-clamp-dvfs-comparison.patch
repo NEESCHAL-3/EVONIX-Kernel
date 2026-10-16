@@ -1,0 +1,25 @@
+Subject: [PATCH] mtk: sched: compare the cached max clamp with UCLAMP_MAX
+
+sched_queue_task_hook() detects clamp changes for explicitly clamped tasks.
+Comparing the cached maximum against rq->uclamp[UCLAMP_MIN] produces false
+positives for unchanged, non-equal clamps and misses some max-only changes.
+
+Compare each cached clamp against the matching runqueue value. Leave the
+existing enqueue guard, locking, per-CPU DVFS target and governor unchanged.
+
+This candidate targets MTK_kernel_device_modules, not the common GKI tree.
+It is not part of EVONIX's common boot image. The deployed module version,
+module ABI and packaging must be validated before using a rebuilt module.
+
+diff --git a/drivers/misc/mediatek/sched/eas/sched_main.c b/drivers/misc/mediatek/sched/eas/sched_main.c
+--- a/drivers/misc/mediatek/sched/eas/sched_main.c
++++ b/drivers/misc/mediatek/sched/eas/sched_main.c
+@@ -172,7 +172,7 @@
+ 
+ 			uclamp_diff = (uclamp_diff
+ 				|| (READ_ONCE(sugov_data_ptr->uclamp[UCLAMP_MAX])
+-				!= READ_ONCE(rq->uclamp[UCLAMP_MIN].value)));
++				!= READ_ONCE(rq->uclamp[UCLAMP_MAX].value)));
+ 
+ 			if (uclamp_diff) {
+ 				int this_cpu = smp_processor_id();

@@ -695,22 +695,32 @@ void avg_vruntime_update(struct cfs_rq *cfs_rq, s64 delta)
 	cfs_rq->avg_vruntime -= cfs_rq->avg_load * delta;
 }
 
+/* The caller holds the rq lock, so one snapshot serves an entire tree search. */
+static void avg_vruntime_snapshot(struct cfs_rq *cfs_rq, s64 *avg, long *load)
+{
+	struct sched_entity *curr = cfs_rq->curr;
+
+	*avg = cfs_rq->avg_vruntime;
+	*load = cfs_rq->avg_load;
+
+	if (curr && curr->on_rq) {
+		unsigned long weight = scale_load_down(curr->load.weight);
+
+		*avg += entity_key(cfs_rq, curr) * weight;
+		*load += weight;
+	}
+}
+
 /*
  * Specifically: avg_runtime() + 0 must result in entity_eligible() := true
  * For this to be so, the result of this function must have a left bias.
  */
 u64 avg_vruntime(struct cfs_rq *cfs_rq)
 {
-	struct sched_entity *curr = cfs_rq->curr;
-	s64 avg = cfs_rq->avg_vruntime;
-	long load = cfs_rq->avg_load;
+	s64 avg;
+	long load;
 
-	if (curr && curr->on_rq) {
-		unsigned long weight = scale_load_down(curr->load.weight);
-
-		avg += entity_key(cfs_rq, curr) * weight;
-		load += weight;
-	}
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
 
 	if (load) {
 		/* sign flips effective floor / ceil */
@@ -772,20 +782,19 @@ static void update_entity_lag(struct cfs_rq *cfs_rq, struct sched_entity *se)
  * Note: using 'avg_vruntime() > se->vruntime' is inacurate due
  *       to the loss in precision caused by the division.
  */
+static inline int vruntime_eligible_snapshot(struct cfs_rq *cfs_rq, u64 vruntime,
+					     s64 avg, long load)
+{
+	return avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load;
+}
+
 static int vruntime_eligible(struct cfs_rq *cfs_rq, u64 vruntime)
 {
-	struct sched_entity *curr = cfs_rq->curr;
-	s64 avg = cfs_rq->avg_vruntime;
-	long load = cfs_rq->avg_load;
+	s64 avg;
+	long load;
 
-	if (curr && curr->on_rq) {
-		unsigned long weight = scale_load_down(curr->load.weight);
-
-		avg += entity_key(cfs_rq, curr) * weight;
-		load += weight;
-	}
-
-	return avg >= (s64)(vruntime - cfs_rq->min_vruntime) * load;
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
+	return vruntime_eligible_snapshot(cfs_rq, vruntime, avg, load);
 }
 
 int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se)
@@ -925,12 +934,14 @@ struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
  *
  * Which allows tree pruning through eligibility.
  */
-static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
+static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq, bool protect_slice)
 {
 	struct rb_node *node = cfs_rq->tasks_timeline.rb_root.rb_node;
 	struct sched_entity *se = __pick_first_entity(cfs_rq);
 	struct sched_entity *curr = cfs_rq->curr;
 	struct sched_entity *best = NULL;
+	s64 avg;
+	long load;
 
 	/*
 	 * We can safely skip eligibility check if there is only one entity
@@ -939,18 +950,22 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 	if (cfs_rq->nr_running == 1)
 		return curr && curr->on_rq ? curr : se;
 
-	if (curr && (!curr->on_rq || !entity_eligible(cfs_rq, curr)))
+	avg_vruntime_snapshot(cfs_rq, &avg, &load);
+
+	if (curr && (!curr->on_rq ||
+		     !vruntime_eligible_snapshot(cfs_rq, curr->vruntime, avg, load)))
 		curr = NULL;
 
 	/*
 	 * Once selected, run a task until it either becomes non-eligible or
 	 * until it gets a new slice. See the HACK in set_next_entity().
 	 */
-	if (sched_feat(RUN_TO_PARITY) && curr && curr->vlag == curr->deadline)
+	if (protect_slice && sched_feat(RUN_TO_PARITY) && curr &&
+	    curr->vlag == curr->deadline)
 		return curr;
 
 	/* Pick the leftmost entity if it's eligible */
-	if (se && entity_eligible(cfs_rq, se)) {
+	if (se && vruntime_eligible_snapshot(cfs_rq, se->vruntime, avg, load)) {
 		best = se;
 		goto found;
 	}
@@ -963,8 +978,9 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 		 * Eligible entities in left subtree are always better
 		 * choices, since they have earlier deadlines.
 		 */
-		if (left && vruntime_eligible(cfs_rq,
-					__node_2_se(left)->min_vruntime)) {
+		if (left && vruntime_eligible_snapshot(cfs_rq,
+						       __node_2_se(left)->min_vruntime,
+						       avg, load)) {
 			node = left;
 			continue;
 		}
@@ -976,7 +992,7 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 		 * entity, so check the current node since it is the one
 		 * with earliest deadline that might be eligible.
 		 */
-		if (entity_eligible(cfs_rq, se)) {
+		if (vruntime_eligible_snapshot(cfs_rq, se->vruntime, avg, load)) {
 			best = se;
 			break;
 		}
@@ -1027,6 +1043,48 @@ int sched_update_scaling(void)
 
 static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
 
+static inline bool did_preempt_short(struct cfs_rq *cfs_rq,
+				     struct sched_entity *curr)
+{
+	if (!sched_feat(PREEMPT_SHORT))
+		return false;
+
+	if (curr->vlag == curr->deadline)
+		return false;
+
+	return !entity_eligible(cfs_rq, curr);
+}
+
+static inline bool do_preempt_short(struct cfs_rq *cfs_rq,
+				    struct sched_entity *pse,
+				    struct sched_entity *se)
+{
+	if (!sched_feat(PREEMPT_SHORT) || pse->slice >= se->slice)
+		return false;
+
+	if (!entity_eligible(cfs_rq, pse))
+		return false;
+
+	return entity_before(pse, se) || !entity_eligible(cfs_rq, se);
+}
+
+/* Size requests without changing entity weights or group-level fairness. */
+static u64 evonix_entity_slice(struct sched_entity *se)
+{
+	u64 slice = READ_ONCE(sysctl_sched_base_slice);
+
+#ifdef CONFIG_EVONIX_RODIN_SHORT_SLICE
+	if (sched_feat(EVONIX_LATENCY_SLICE) && entity_is_task(se)) {
+		struct task_struct *p = task_of(se);
+
+		if (p->policy == SCHED_NORMAL &&
+		    READ_ONCE(task_group(p)->latency_sensitive))
+			return max_t(u64, 1, slice >> 1);
+	}
+#endif
+	return slice;
+}
+
 /*
  * XXX: strictly: vd_i += N*r_i/w_i such that: vd_i > ve_i
  * this is probably good enough.
@@ -1034,12 +1092,16 @@ static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
 static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	bool skip_preempt = false;
+	bool expired;
 
 	trace_android_rvh_update_deadline(cfs_rq, se, &skip_preempt);
 	if (skip_preempt)
 		return;
 
-	if ((s64)(se->vruntime - se->deadline) < 0)
+	expired = (s64)(se->vruntime - se->deadline) >= 0;
+
+	/* A preempted request must also yield once its entity is ineligible. */
+	if (!expired && (cfs_rq->nr_running < 2 || !did_preempt_short(cfs_rq, se)))
 		return;
 
 	/*
@@ -1047,15 +1109,16 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	 * nice) while the request time r_i is determined by
 	 * sysctl_sched_base_slice.
 	 */
-	se->slice = sysctl_sched_base_slice;
+	if (expired) {
+		se->slice = evonix_entity_slice(se);
+
+		/* EEVDF: vd_i = ve_i + r_i / w_i */
+		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+	}
 
 	/*
-	 * EEVDF: vd_i = ve_i + r_i / w_i
-	 */
-	se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
-
-	/*
-	 * The task has consumed its request, reschedule.
+	 * Renewed or unprotected-ineligible requests need another selection.
+	 * Count fair entities, not RT/DL tasks on the physical runqueue.
 	 */
 	if (cfs_rq->nr_running > 1) {
 		trace_android_vh_resched_curr_lazy(rq_of(cfs_rq), &skip_preempt);
@@ -4312,7 +4375,8 @@ static inline void
 update_tg_cfs_runnable(struct cfs_rq *cfs_rq, struct sched_entity *se, struct cfs_rq *gcfs_rq)
 {
 	long delta_sum, delta_avg = gcfs_rq->avg.runnable_avg - se->avg.runnable_avg;
-	u32 new_sum, divider;
+	u64 new_sum;
+	u32 divider;
 
 	/* Nothing to update */
 	if (!delta_avg)
@@ -4326,7 +4390,7 @@ update_tg_cfs_runnable(struct cfs_rq *cfs_rq, struct sched_entity *se, struct cf
 
 	/* Set new sched_entity's runnable */
 	se->avg.runnable_avg = gcfs_rq->avg.runnable_avg;
-	new_sum = se->avg.runnable_avg * divider;
+	new_sum = (u64)se->avg.runnable_avg * divider;
 	delta_sum = (long)new_sum - (long)se->avg.runnable_sum;
 	se->avg.runnable_sum = new_sum;
 
@@ -5215,7 +5279,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	u64 vslice, vruntime = avg_vruntime(cfs_rq);
 	s64 lag = 0;
 
-	se->slice = sysctl_sched_base_slice;
+	se->slice = evonix_entity_slice(se);
 	vslice = calc_delta_fair(se->slice, se);
 
 	/*
@@ -5516,7 +5580,7 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	    cfs_rq->next && entity_eligible(cfs_rq, cfs_rq->next))
 		return cfs_rq->next;
 
-	return pick_eevdf(cfs_rq);
+	return pick_eevdf(cfs_rq, true);
 }
 
 static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq);
@@ -7536,9 +7600,11 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
  * maximize capacity.
  */
 static int
-select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target)
+select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target,
+		     unsigned long task_util, unsigned long util_min,
+		     unsigned long util_max)
 {
-	unsigned long task_util, util_min, util_max, best_cap = 0;
+	unsigned long best_cap = 0;
 	int fits, best_fits = 0;
 	int cpu, best_cpu = -1;
 	struct cpumask *cpus;
@@ -7546,12 +7612,8 @@ select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target)
 	cpus = this_cpu_cpumask_var_ptr(select_rq_mask);
 	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
 
-	task_util = task_util_est(p);
-	util_min = uclamp_eff_value(p, UCLAMP_MIN);
-	util_max = uclamp_eff_value(p, UCLAMP_MAX);
-
 	for_each_cpu_wrap(cpu, cpus, target) {
-		unsigned long cpu_cap = capacity_of(cpu);
+		unsigned long cpu_cap;
 
 		if (!available_idle_cpu(cpu) && !sched_idle_cpu(cpu))
 			continue;
@@ -7567,6 +7629,8 @@ select_idle_capacity(struct task_struct *p, struct sched_domain *sd, int target)
 		 */
 		else if (fits < 0)
 			cpu_cap = capacity_orig_of(cpu) - thermal_load_avg(cpu_rq(cpu));
+		else
+			cpu_cap = capacity_of(cpu);
 
 		/*
 		 * First, select CPU which fits better (-1 being better than 0).
@@ -7679,7 +7743,9 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 		 * capacity path.
 		 */
 		if (sd) {
-			i = select_idle_capacity(p, sd, target);
+			/* Reuse the synchronized utilization and clamp snapshot. */
+			i = select_idle_capacity(p, sd, target, task_util,
+						 util_min, util_max);
 			return ((unsigned)i < nr_cpumask_bits) ? i : target;
 		}
 	}
@@ -7957,6 +8023,11 @@ eenv_pd_max_util(struct energy_env *eenv, struct cpumask *pd_cpus,
 		 */
 		eff_util = effective_cpu_util(cpu, util, FREQUENCY_UTIL, tsk);
 		max_util = max(max_util, eff_util);
+
+		/* Keep the full traversal when a vendor owns utilization queries. */
+		if (max_util >= eenv->cpu_cap &&
+		    !trace_android_rvh_effective_cpu_util_enabled())
+			return eenv->cpu_cap;
 	}
 
 	return min(max_util, eenv->cpu_cap);
@@ -7971,11 +8042,17 @@ static inline unsigned long
 compute_energy(struct energy_env *eenv, struct perf_domain *pd,
 	       struct cpumask *pd_cpus, struct task_struct *p, int dst_cpu)
 {
-	unsigned long max_util = eenv_pd_max_util(eenv, pd_cpus, p, dst_cpu);
 	unsigned long busy_time = eenv->pd_busy_time;
+	unsigned long max_util;
 
 	if (dst_cpu >= 0)
 		busy_time = min(eenv->pd_cap, busy_time + eenv->task_busy_time);
+
+	/* The EM returns zero for an idle domain, irrespective of its OPP. */
+	if (!busy_time)
+		return 0;
+
+	max_util = eenv_pd_max_util(eenv, pd_cpus, p, dst_cpu);
 
 	return em_cpu_energy(pd->em_pd, max_util, busy_time, eenv->cpu_cap);
 }
@@ -8023,8 +8100,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 {
 	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_rq_mask);
 	unsigned long prev_delta = ULONG_MAX, best_delta = ULONG_MAX;
-	unsigned long p_util_min = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MIN) : 0;
-	unsigned long p_util_max = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MAX) : 1024;
+	unsigned long p_util_min, p_util_max;
 	struct root_domain *rd = this_rq()->rd;
 	int cpu, best_energy_cpu, target = -1;
 	int prev_fits = -1, best_fits = -1;
@@ -8039,12 +8115,12 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 	if (new_cpu != INT_MAX)
 		return new_cpu;
 
-	sync_entity_load_avg(&p->se);
-
 	rcu_read_lock();
 	pd = rcu_dereference(rd->pd);
 	if (!pd || READ_ONCE(rd->overutilized))
 		goto unlock;
+
+	sync_entity_load_avg(&p->se);
 
 	cpu = smp_processor_id();
 	if (sync && cpu_rq(cpu)->nr_running == 1 &&
@@ -8066,14 +8142,17 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 
 	target = prev_cpu;
 
-	sync_entity_load_avg(&p->se);
+	/* Vendor placement and unavailable domains need no fallback clamp reads. */
+	p_util_min = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MIN) : 0;
+	p_util_max = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MAX) : 1024;
+
+	/* The task's PELT state was synchronized before the fit checks above. */
 	if (!task_util_est(p) && p_util_min == 0)
 		goto unlock;
 
 	eenv_task_busy_time(&eenv, p, prev_cpu);
 
 	for (; pd; pd = pd->next) {
-		unsigned long util_min = p_util_min, util_max = p_util_max;
 		unsigned long cpu_cap, cpu_thermal_cap, util;
 		long prev_spare_cap = -1, max_spare_cap = -1;
 		unsigned long rq_util_min, rq_util_max;
@@ -8086,6 +8165,11 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 		if (cpumask_empty(cpus))
 			continue;
 
+		/* No placement candidate: keep the full PD mask for real estimates. */
+		if (!cpumask_intersects(cpus, p->cpus_ptr) ||
+		    !cpumask_intersects(cpus, sched_domain_span(sd)))
+			continue;
+
 		/* Account thermal pressure for the energy estimation */
 		cpu = cpumask_first(cpus);
 		cpu_thermal_cap = arch_scale_cpu_capacity(cpu);
@@ -8096,6 +8180,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 
 		for_each_cpu(cpu, cpus) {
 			struct rq *rq = cpu_rq(cpu);
+			unsigned long util_min = p_util_min, util_max = p_util_max;
 
 			eenv.pd_cap += cpu_thermal_cap;
 
@@ -8113,7 +8198,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 			 * IOW, placing the task there would make the CPU
 			 * overutilized. Take uclamp into account to see how
 			 * much capacity we can get out of the CPU; this is
-			 * aligned with sched_cpu_util().
+			 * aligned with sched_cpu_util(). Reset the task clamps for
+			 * every CPU so a busy CPU's hints cannot leak into an idle one.
 			 */
 			if (uclamp_is_used() && !uclamp_rq_is_idle(rq)) {
 				/*
@@ -8369,6 +8455,20 @@ static void set_next_buddy(struct sched_entity *se)
 	}
 }
 
+static inline bool evonix_ui_wakeup(struct task_struct *p,
+				    struct task_struct *curr)
+{
+#ifdef CONFIG_EVONIX_RODIN_UI_WAKEUP
+	if (!sched_feat(EVONIX_UI_WAKEUP))
+		return false;
+
+	return READ_ONCE(task_group(p)->latency_sensitive) &&
+	       !READ_ONCE(task_group(curr)->latency_sensitive);
+#else
+	return false;
+#endif
+}
+
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -8381,6 +8481,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	int cse_is_idle, pse_is_idle;
 	bool ignore = false;
 	bool preempt = false;
+	bool protect_slice = true;
 
 	if (unlikely(se == pse))
 		return;
@@ -8450,9 +8551,13 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		return;
 
 	/*
-	 * XXX pick_eevdf(cfs_rq) != se ?
+	 * A ROM-marked latency-sensitive wakee may compete on its deadline
+	 * before a background entity finishes its protected request. Keep
+	 * eligibility, group weights and the vendor's decision unchanged.
 	 */
-	if (pick_eevdf(cfs_rq) == pse)
+	protect_slice = !(evonix_ui_wakeup(p, curr) ||
+			  do_preempt_short(cfs_rq, pse, se));
+	if (pick_eevdf(cfs_rq, protect_slice) == pse)
 		goto preempt;
 
 	return;
@@ -8462,6 +8567,16 @@ preempt:
 
 	if (ignore)
 		return;
+
+	/*
+	 * set_next_entity() stores slice protection in vlag. Clear it only
+	 * after selecting the wakee and after the vendor permits rescheduling,
+	 * otherwise the next pick would immediately select current again.
+	 */
+	if (!protect_slice) {
+		se->vlag = 0;
+		clear_buddies(cfs_rq, se);
+	}
 
 	resched_curr(rq);
 }
@@ -9084,9 +9199,11 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		 * - for NEWLY_IDLE
 		 * - if we have already computed one in current iteration
 		 * - if it's an active balance
+		 * - if migration is temporarily disabled for this task
 		 */
 		if (env->idle == CPU_NEWLY_IDLE ||
-		    env->flags & (LBF_DST_PINNED | LBF_ACTIVE_LB))
+		    env->flags & (LBF_DST_PINNED | LBF_ACTIVE_LB) ||
+		    is_migration_disabled(p))
 			return 0;
 
 		/* Prevent to re-select dst_cpu via env's CPUs: */
@@ -9120,8 +9237,28 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		return 1;
 
 	tsk_cache_hot = migrate_degrades_locality(p, env);
-	if (tsk_cache_hot == -1)
+	if (tsk_cache_hot == -1) {
+		/*
+		 * A queued misfit can use an idle CPU that fully fits it.
+		 * Do not make it wait for cache cooling or a stopper when
+		 * the destination offers a real capacity uplift. Keep this
+		 * exception out of ordinary load/util balancing and retain
+		 * explicit migration-cost and core-cookie restrictions.
+		 */
+		if (env->migration_type == migrate_misfit &&
+		    env->sd->flags & SD_ASYM_CPUCAPACITY &&
+		    env->idle != CPU_NOT_IDLE &&
+		    sysctl_sched_migration_cost != -1 &&
+		    capacity_greater(capacity_of(env->dst_cpu),
+				     capacity_of(env->src_cpu)) &&
+		    available_idle_cpu(env->dst_cpu) &&
+		    !task_fits_cpu(p, env->src_cpu) &&
+		    task_fits_cpu(p, env->dst_cpu) &&
+		    sched_core_cookie_match(env->dst_rq, p))
+			return 1;
+
 		tsk_cache_hot = task_hot(p, env);
+	}
 
 	if (tsk_cache_hot <= 0 ||
 	    env->sd->nr_balance_failed > env->sd->cache_nice_tries) {
@@ -10182,9 +10319,15 @@ static bool update_sd_pick_busiest(struct lb_env *env,
 	 * per-CPU capacity. Migrating tasks to less capable CPUs may harm
 	 * throughput. Maximize throughput, power/energy consequences are not
 	 * considered.
+	 *
+	 * Check the actual fair-task count too: EAS/uclamp or a vendor's
+	 * overutilization policy can classify a group with queued work as
+	 * fully busy rather than overloaded. Do not strand those tasks on
+	 * a faster CPU while excluding idle, lower-capacity destinations.
 	 */
 	if ((env->sd->flags & SD_ASYM_CPUCAPACITY) &&
 	    (sgs->group_type <= group_fully_busy) &&
+	    (sgs->sum_h_nr_running <= sgs->group_weight) &&
 	    (capacity_greater(sg->sgc->min_capacity, capacity_of(env->dst_cpu))))
 		return false;
 
@@ -11275,8 +11418,6 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			break;
 
 		case migrate_util:
-			util = cpu_util_cfs_boost(i);
-
 			/*
 			 * Don't try to pull utilization from a CPU with one
 			 * running task. Whatever its utilization, we will fail
@@ -11284,6 +11425,8 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			 */
 			if (nr_running <= 1)
 				continue;
+
+			util = cpu_util_cfs_boost(i);
 
 			if (busiest_util < util) {
 				busiest_util = util;
@@ -11629,8 +11772,12 @@ more_balance:
 		 * We do not want newidle balance, which can be very
 		 * frequent, pollute the failure counter causing
 		 * excessive cache_hot migrations and active balances.
+		 *
+		 * Similarly, misfit migration is not load/util balancing and
+		 * must not pollute nr_balance_failed.
 		 */
-		if (idle != CPU_NEWLY_IDLE)
+		if (idle != CPU_NEWLY_IDLE &&
+		    env.migration_type != migrate_misfit)
 			sd->nr_balance_failed++;
 
 		if (need_active_balance(&env)) {
@@ -11713,8 +11860,12 @@ out_one_pinned:
 	 * repeatedly reach this code, which would lead to balance_interval
 	 * skyrocketing in a short amount of time. Skip the balance_interval
 	 * increase logic to avoid that.
+	 *
+	 * Misfit migration is not an indication that the system is busy
+	 * and needs load balancing to back off either.
 	 */
-	if (env.idle == CPU_NEWLY_IDLE)
+	if (env.idle == CPU_NEWLY_IDLE ||
+	    env.migration_type == migrate_misfit)
 		goto out;
 
 	/* tune up the balancing interval */
@@ -12038,6 +12189,13 @@ static void kick_ilb(unsigned int flags)
 		return;
 
 	/*
+	 * Don't bother if no new NOHZ balance work items for ilb_cpu,
+	 * i.e. all bits in flags are already set in ilb_cpu.
+	 */
+	if ((atomic_read(nohz_flags(ilb_cpu)) & flags) == flags)
+		return;
+
+	/*
 	 * Access to rq::nohz_csd is serialized by NOHZ_KICK_MASK; he who sets
 	 * the first flag owns it; cleared by nohz_csd_func().
 	 */
@@ -12065,6 +12223,9 @@ static void nohz_balancer_kick(struct rq *rq)
 	int nr_busy, i, cpu = rq->cpu;
 	unsigned int flags = 0;
 	int done = 0;
+
+	/* The scheduler tick's IRQ-disabled context also protects RCU readers. */
+	lockdep_assert_irqs_disabled();
 
 	if (unlikely(rq->idle_balance))
 		return;
@@ -12094,13 +12255,11 @@ static void nohz_balancer_kick(struct rq *rq)
 		goto out;
 
 	if (rq->nr_running >= 2) {
-		flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+		flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
 		goto out;
 	}
 
-	rcu_read_lock();
-
-	sd = rcu_dereference(rq->sd);
+	sd = rcu_dereference_sched(rq->sd);
 	if (sd) {
 		/*
 		 * If there's a CFS task and the current CPU has reduced
@@ -12108,12 +12267,12 @@ static void nohz_balancer_kick(struct rq *rq)
 		 * on.
 		 */
 		if (rq->cfs.h_nr_running >= 1 && check_cpu_capacity(rq, sd)) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			goto out;
 		}
 	}
 
-	sd = rcu_dereference(per_cpu(sd_asym_packing, cpu));
+	sd = rcu_dereference_sched(per_cpu(sd_asym_packing, cpu));
 	if (sd) {
 		/*
 		 * When ASYM_PACKING; see if there's a more preferred CPU
@@ -12126,21 +12285,21 @@ static void nohz_balancer_kick(struct rq *rq)
 		for_each_cpu_and(i, sched_domain_span(sd), nohz.idle_cpus_mask) {
 			if (sched_use_asym_prio(sd, i) &&
 			    sched_asym_prefer(i, cpu)) {
-				flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-				goto unlock;
+				flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+				goto out;
 			}
 		}
 	}
 
-	sd = rcu_dereference(per_cpu(sd_asym_cpucapacity, cpu));
+	sd = rcu_dereference_sched(per_cpu(sd_asym_cpucapacity, cpu));
 	if (sd) {
 		/*
 		 * When ASYM_CPUCAPACITY; see if there's a higher capacity CPU
 		 * to run the misfit task on.
 		 */
 		if (check_misfit_status(rq, sd)) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			goto out;
 		}
 
 		/*
@@ -12150,10 +12309,10 @@ static void nohz_balancer_kick(struct rq *rq)
 		 *
 		 * Skip the LLC logic because it's not relevant in that case.
 		 */
-		goto unlock;
+		goto out;
 	}
 
-	sds = rcu_dereference(per_cpu(sd_llc_shared, cpu));
+	sds = rcu_dereference_sched(per_cpu(sd_llc_shared, cpu));
 	if (sds) {
 		/*
 		 * If there is an imbalance between LLC domains (IOW we could
@@ -12166,12 +12325,10 @@ static void nohz_balancer_kick(struct rq *rq)
 		 */
 		nr_busy = atomic_read(&sds->nr_busy_cpus);
 		if (nr_busy > 1) {
-			flags = NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
-			goto unlock;
+			flags |= NOHZ_STATS_KICK | NOHZ_BALANCE_KICK;
+			goto out;
 		}
 	}
-unlock:
-	rcu_read_unlock();
 out:
 	if (READ_ONCE(nohz.needs_update))
 		flags |= NOHZ_NEXT_KICK;

@@ -627,7 +627,7 @@ static ssize_t writeback_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	struct zram *zram = dev_to_zram(dev);
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	unsigned long index = 0;
 	struct bio bio;
 	struct bio_vec bio_vec;
@@ -648,11 +648,9 @@ static ssize_t writeback_store(struct device *dev,
 		if (strncmp(buf, PAGE_WB_SIG, sizeof(PAGE_WB_SIG) - 1))
 			return -EINVAL;
 
-		if (kstrtol(buf + sizeof(PAGE_WB_SIG) - 1, 10, &index) ||
-				index >= nr_pages)
+		if (kstrtoul(buf + sizeof(PAGE_WB_SIG) - 1, 10, &index))
 			return -EINVAL;
 
-		nr_pages = 1;
 		mode = PAGE_WRITEBACK;
 	}
 
@@ -660,6 +658,15 @@ static ssize_t writeback_store(struct device *dev,
 	if (!init_done(zram)) {
 		ret = -EINVAL;
 		goto release_init_lock;
+	}
+
+	nr_pages = zram->disksize >> PAGE_SHIFT;
+	if (mode == PAGE_WRITEBACK) {
+		if (index >= nr_pages) {
+			ret = -EINVAL;
+			goto release_init_lock;
+		}
+		nr_pages = 1;
 	}
 
 	if (!zram->backing_dev) {
@@ -878,7 +885,7 @@ static ssize_t read_block_state(struct file *file, char __user *buf,
 	char *kbuf;
 	ssize_t index, written = 0;
 	struct zram *zram = file->private_data;
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	struct timespec64 ts;
 
 	kbuf = kvmalloc(count, GFP_KERNEL);
@@ -892,6 +899,7 @@ static ssize_t read_block_state(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
+	nr_pages = zram->disksize >> PAGE_SHIFT;
 	for (index = *ppos; index < nr_pages; index++) {
 		int copied;
 
@@ -1620,6 +1628,14 @@ static int zram_recompress(struct zram *zram, u32 index, struct page *page,
 	if (comp_len_old < threshold)
 		return 0;
 
+	/* Do not decompress or clear IDLE without an eligible compressor. */
+	for (; prio < prio_max; prio++) {
+		if (zram->comps[prio] && prio > zram_get_priority(zram, index))
+			break;
+	}
+	if (prio == prio_max)
+		return 0;
+
 	ret = zram_read_from_zspool(zram, page, index);
 	if (ret)
 		return ret;
@@ -1743,7 +1759,7 @@ static ssize_t recompress_store(struct device *dev,
 {
 	u32 prio = ZRAM_SECONDARY_COMP, prio_max = ZRAM_MAX_COMPS;
 	struct zram *zram = dev_to_zram(dev);
-	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
+	unsigned long nr_pages;
 	char *args, *param, *val, *algo = NULL;
 	u32 mode = 0, threshold = 0;
 	unsigned long index;
@@ -1758,12 +1774,16 @@ static ssize_t recompress_store(struct device *dev,
 			return -EINVAL;
 
 		if (!strcmp(param, "type")) {
-			if (!strcmp(val, "idle"))
+			if (!strcmp(val, "all"))
+				mode = 0;
+			else if (!strcmp(val, "idle"))
 				mode = RECOMPRESS_IDLE;
-			if (!strcmp(val, "huge"))
+			else if (!strcmp(val, "huge"))
 				mode = RECOMPRESS_HUGE;
-			if (!strcmp(val, "huge_idle"))
+			else if (!strcmp(val, "huge_idle"))
 				mode = RECOMPRESS_IDLE | RECOMPRESS_HUGE;
+			else
+				return -EINVAL;
 			continue;
 		}
 
@@ -1782,6 +1802,8 @@ static ssize_t recompress_store(struct device *dev,
 			algo = val;
 			continue;
 		}
+
+		return -EINVAL;
 	}
 
 	if (threshold >= huge_class_size)
@@ -1793,6 +1815,7 @@ static ssize_t recompress_store(struct device *dev,
 		goto release_init_lock;
 	}
 
+	nr_pages = zram->disksize >> PAGE_SHIFT;
 	if (algo) {
 		bool found = false;
 
@@ -1811,6 +1834,12 @@ static ssize_t recompress_store(struct device *dev,
 			ret = -EINVAL;
 			goto release_init_lock;
 		}
+	}
+
+	/* With no secondary compressor, there is no useful work to scan. */
+	if (zram->num_active_comps < 2) {
+		ret = len;
+		goto release_init_lock;
 	}
 
 	page = alloc_page(GFP_KERNEL);

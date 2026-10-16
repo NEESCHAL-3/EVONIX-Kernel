@@ -1,0 +1,27 @@
+Subject: [PATCH] mtk: dpmaif: defer traffic diagnostic dumps during CPU idle
+
+The traffic_monitor callback prints queue and interface statistics, then
+rearms its diagnostic timer. It does not service packets, refill buffers,
+or enforce a hardware deadline. Mark only this timer TIMER_DEFERRABLE so
+an idle CPU need not wake solely for a traffic dump.
+
+The nominal interval and diagnostic callback remain unchanged. Dumps can
+be delayed during idle; this is an explicit diagnostics tradeoff. Packet
+IRQs, TX-completion timers, watchdogs, recovery and PM sequences remain
+unchanged. This does not disable modem wakeups or alter radio firmware.
+
+This targets the Rodin vendor CCCI module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+--- a/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
++++ b/drivers/misc/mediatek/eccci/hif/ccci_dpmaif_com.c
+@@ -3399,7 +3399,8 @@
+ 
+ #if DPMAIF_TRAFFIC_MONITOR_INTERVAL
+-	timer_setup(&dpmaif_ctl->traffic_monitor, dpmaif_traffic_monitor_func, 0);
++	timer_setup(&dpmaif_ctl->traffic_monitor, dpmaif_traffic_monitor_func,
++		    TIMER_DEFERRABLE);
+ #endif
+ 	mtk_ccci_net_speed_init();
+ 
+ 	return 0;  /* dpmaif init succ. */

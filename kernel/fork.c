@@ -2468,7 +2468,11 @@ __latent_entropy struct task_struct *copy_process(
 	memset(&p->rss_stat, 0, sizeof(p->rss_stat));
 #endif
 
-	p->default_timer_slack_ns = current->timer_slack_ns;
+	if (current->policy == SCHED_FIFO || current->policy == SCHED_RR ||
+	    current->policy == SCHED_DEADLINE)
+		p->default_timer_slack_ns = current->default_timer_slack_ns;
+	else
+		p->default_timer_slack_ns = current->timer_slack_ns;
 
 #ifdef CONFIG_PSI
 	p->psi_flags = 0;

@@ -30,16 +30,24 @@ void deferred_free(struct deferred_freelist_item *item,
 		   size_t nr_pages)
 {
 	unsigned long flags;
+	bool wake;
 
 	INIT_LIST_HEAD(&item->list);
 	item->nr_pages = nr_pages;
 	item->free = free;
 
 	spin_lock_irqsave(&free_list_lock, flags);
+	wake = list_empty(&free_list);
 	list_add(&item->list, &free_list);
 	list_nr_pages += nr_pages;
 	spin_unlock_irqrestore(&free_list_lock, flags);
-	wake_up(&freelist_waitqueue);
+	/*
+	 * The worker waits for a nonempty list, not for individual items.
+	 * Snapshot the transition under the list lock, then notify outside it.
+	 * A nonempty list keeps the wait predicate true until it is drained.
+	 */
+	if (wake)
+		wake_up(&freelist_waitqueue);
 }
 EXPORT_SYMBOL_GPL(deferred_free);
 

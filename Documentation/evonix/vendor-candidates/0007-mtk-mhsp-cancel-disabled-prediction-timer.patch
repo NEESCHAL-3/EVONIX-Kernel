@@ -1,0 +1,23 @@
+Subject: [PATCH] mtk: cpuidle: cancel the prediction timer on governor disable
+
+gov_disable_device() can return while other CPUs still use MHSP. Cancel
+this instance's timer before that return, not only when the final CPU
+disables the governor. Otherwise it can cause a stale timer wakeup or
+race with the memset and hrtimer_init on a later enable.
+
+Use synchronous cancellation so an in-flight callback finishes before the
+instance can be reinitialized. The callback takes no governor-disable lock.
+Do not change active-governor timer deadlines or wake-source handling.
+This targets the MHSP vendor module, not the common kernel boot image.
+
+diff --git a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+--- a/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
++++ b/drivers/misc/mediatek/lpm/governors/MHSP/lpm-mhsp.c
+@@ -753,6 +753,7 @@
+ 	int ret;
+ 
+ 	gov->enable = false;
++	hrtimer_cancel(&gov->shallow.histtimer);
+ 	for_each_possible_cpu(cpu) {
+ 		struct gov_info *gov = &per_cpu(gov_infos, cpu);
+ 

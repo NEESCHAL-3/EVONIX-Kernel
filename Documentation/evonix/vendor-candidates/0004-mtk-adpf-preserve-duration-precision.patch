@@ -1,0 +1,50 @@
+Subject: [PATCH] mtk: eas: preserve ADPF duration precision before scaling
+
+The session durations are signed longs but the EAS callback narrows them to
+unsigned int and multiplies actual duration by 1024 in 32-bit arithmetic.
+At normal frame durations this wraps: equal 16,666,667 ns durations yield
+250 instead of 1024. Negative reports also become unsigned positives.
+
+Keep signed duration precision and reject nonpositive values.
+Use mul_u64_u64_div_u64 for fractional scaling. Saturate at
+SCHED_CAPACITY_SCALE, matching the existing group setter's cap.
+The helper is already in the MediaTek GKI symbol list. No
+structure or exported API changes are required. This targets
+the vendor scheduler module, not the common boot image.
+
+diff --git a/drivers/misc/mediatek/sched/eas/eas_adpf.c b/drivers/misc/mediatek/sched/eas/eas_adpf.c
+--- a/drivers/misc/mediatek/sched/eas/eas_adpf.c
++++ b/drivers/misc/mediatek/sched/eas/eas_adpf.c
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2022 MediaTek Inc.
+  */
+ 
++#include <linux/math64.h>
+ #include <linux/sched.h>
+ #include <linux/sched/cputime.h>
+ #include <sched/sched.h>
+@@ -30,8 +31,8 @@
+ 	unsigned int grp_mode = GP_MODE_0;
+ #if IS_ENABLED(CONFIG_MTK_SCHED_GROUP_AWARE)
+ 	unsigned int adpf_ratio = 0;
+-	unsigned int durationNanos = 0;
+-	unsigned int targetDurationNanos = 0;
++	s64 durationNanos = 0;
++	s64 targetDurationNanos = 0;
+ #endif
+ 	bool vip_enable = sched_vip_enable_get();
+ #if IS_ENABLED(CONFIG_MTK_SCHED_GROUP_AWARE)
+@@ -78,7 +79,12 @@
+ 		durationNanos = session->workDuration[session->work_duration_size - 1]->durationNanos;
+ 		targetDurationNanos = session->targetDurationNanos;
+ 		if(durationNanos > 0 && targetDurationNanos > 0) {
+-			adpf_ratio = (durationNanos * 1024) / targetDurationNanos;
++			if (durationNanos >= targetDurationNanos)
++				adpf_ratio = SCHED_CAPACITY_SCALE;
++			else
++				adpf_ratio = mul_u64_u64_div_u64(durationNanos,
++								 SCHED_CAPACITY_SCALE,
++								 targetDurationNanos);
+ 			set_group_active_ratio_cap(GROUP_ID_2, adpf_ratio);
+ 		} else {
+ 			set_group_active_ratio_cap(GROUP_ID_2, 0);
