@@ -9,6 +9,36 @@ config OPLUS_FEATURE_SCHED_ASSIST
           Enable native OPlus SchedAssist imported from the
           MT6899 Linux 6.6 OPlus kernel source.
 
+config OPLUS_SCHED_GROUP_OPT
+        bool "OPlus SchedAssist group optimization"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default y
+        help
+          Enable task group weight optimization and EEVDF deadline
+          scaling for UX task groups.
+
+config OPLUS_FEATURE_LOADBALANCE
+        bool "OPlus SchedAssist load balance"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default y
+        help
+          Enable the native OPlus load-balance extension used by
+          SchedAssist, including /proc/oplus_scheduler/sched_assist/lb_enable.
+
+config OPLUS_FEATURE_PIPELINE
+        bool "OPlus SchedAssist render pipeline optimization"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default y
+        help
+          Enable pipeline stage tracking for UI and RenderThread tasks.
+
+config BLOCKIO_UX_OPT
+        bool "OPlus SchedAssist block I/O optimization for UX"
+        depends on OPLUS_FEATURE_SCHED_ASSIST
+        default y
+        help
+          Prioritize block I/O operations issued by UX tasks.
+
 
 
 config OPLUS_FEATURE_LOADBALANCE

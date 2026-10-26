@@ -48,11 +48,11 @@ int global_sched_assist_enabled;
 EXPORT_SYMBOL(global_sched_assist_enabled);
 int global_sched_assist_scene;
 EXPORT_SYMBOL(global_sched_assist_scene);
-int global_silver_perf_core;
+int global_silver_perf_core = 1;
 EXPORT_SYMBOL(global_silver_perf_core);
 int global_lowend_plat_opt;
 EXPORT_SYMBOL(global_lowend_plat_opt);
-int global_sched_group_enabled = 0;
+int global_sched_group_enabled = 1;
 EXPORT_SYMBOL(global_sched_group_enabled);
 
 pid_t global_ux_task_pid = -1;
@@ -65,7 +65,7 @@ unsigned int top_app_type;
 struct proc_dir_entry *d_oplus_scheduler;
 struct proc_dir_entry *d_sched_assist;
 
-static int disable_setting = 1;
+static int disable_setting = 0;
 
 #ifdef CONFIG_OPLUS_FEATURE_TICK_GRAN
 static u64 last_total_instr;
@@ -1297,6 +1297,8 @@ int oplus_sched_assist_proc_init(void)
 	device_node = of_find_compatible_node(NULL, NULL, "oplus,sched_assit");
 	if (device_node)
 		disable_setting = 0;
+	else
+		disable_setting = 0; /* Rodin Dimensity 8400 fallback */
 
 #ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
 	oplus_sched_group_init(d_sched_assist);
