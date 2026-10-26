@@ -69,6 +69,44 @@ static struct proc_dir_entry *proc_io_metrics_dir;
 static struct proc_dir_entry *proc_io_metrics_forever_dir;
 static struct proc_dir_entry *proc_ufs_total_read_size_mb;
 static struct proc_dir_entry *proc_ufs_total_write_size_mb;
+static struct proc_dir_entry *proc_io_metrics_forever_read_lat;
+static struct proc_dir_entry *proc_io_metrics_forever_write_lat;
+static struct proc_dir_entry *proc_io_metrics_control_dir;
+static struct proc_dir_entry *proc_io_metrics_control_label;
+static struct proc_dir_entry *proc_io_metrics_control_top_app_monitor;
+static struct proc_dir_entry *proc_io_metrics_control_reset_stat;
+static struct proc_dir_entry *proc_file_monitor_dir;
+static struct proc_dir_entry *proc_file_monitor_remove_event;
+static struct proc_dir_entry *proc_file_monitor_unlink_switch;
+
+static struct proc_dir_entry *proc_jank_info_dir;
+static struct proc_dir_entry *proc_cpu_jank_info_dir;
+static struct proc_dir_entry *proc_clm_version;
+static struct proc_dir_entry *proc_clm_enable;
+static struct proc_dir_entry *proc_clm_mux_switch;
+static struct proc_dir_entry *proc_clm_highload_all;
+static struct proc_dir_entry *proc_clm_highload_grp;
+static struct proc_dir_entry *proc_clm_report_threshold;
+static struct proc_dir_entry *proc_clm_lowload_grp;
+
+static struct proc_dir_entry *proc_boost_pool_dir;
+static struct proc_dir_entry *proc_boost_pool_mtk_mm_dir;
+static struct proc_dir_entry *proc_boost_pool_min;
+
+static struct proc_dir_entry *proc_devinfo_lcd;
+
+static atomic_t evx_clm_enable = ATOMIC_INIT(1);
+static atomic_t evx_clm_mux_switch = ATOMIC_INIT(1);
+static atomic_t evx_clm_highload_all = ATOMIC_INIT(0);
+static atomic_t evx_clm_highload_grp = ATOMIC_INIT(0);
+static atomic_t evx_clm_report_threshold = ATOMIC_INIT(0);
+static atomic_t evx_clm_lowload_grp = ATOMIC_INIT(0);
+
+static atomic_t evx_io_label = ATOMIC_INIT(0);
+static atomic_t evx_io_top_app_monitor = ATOMIC_INIT(0);
+static atomic_t evx_file_remove_event = ATOMIC_INIT(0);
+static atomic_t evx_file_unlink_switch = ATOMIC_INIT(0);
+static atomic_t evx_boost_pool_min = ATOMIC_INIT(0);
 
 static atomic_t oplus_qos_enable = ATOMIC_INIT(1);
 static atomic_t oplus_binder_ux_flag = ATOMIC_INIT(0);
@@ -692,6 +730,116 @@ static const struct proc_ops oplus_eng_version_proc_ops = {
 	.proc_release	= single_release,
 };
 
+
+#define EVX_DEFINE_PROC_INT(name, atomic_var) \
+static int name##_proc_show(struct seq_file *m, void *v) \
+{ \
+	seq_printf(m, "%d\n", atomic_read(&atomic_var)); \
+	return 0; \
+} \
+static int name##_proc_open(struct inode *inode, struct file *file) \
+{ \
+	return single_open(file, name##_proc_show, NULL); \
+} \
+static ssize_t name##_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos) \
+{ \
+	char kbuf[32]; \
+	int val; \
+	if (count >= sizeof(kbuf)) count = sizeof(kbuf) - 1; \
+	if (copy_from_user(kbuf, buf, count)) return -EFAULT; \
+	kbuf[count] = '\0'; \
+	if (!kstrtoint(kbuf, 0, &val)) atomic_set(&atomic_var, val); \
+	return count; \
+} \
+static const struct proc_ops name##_proc_ops = { \
+	.proc_open = name##_proc_open, \
+	.proc_read = seq_read, \
+	.proc_write = name##_proc_write, \
+	.proc_lseek = seq_lseek, \
+	.proc_release = single_release, \
+};
+
+EVX_DEFINE_PROC_INT(evx_io_label, evx_io_label)
+EVX_DEFINE_PROC_INT(evx_io_top_app_monitor, evx_io_top_app_monitor)
+EVX_DEFINE_PROC_INT(evx_file_remove_event, evx_file_remove_event)
+EVX_DEFINE_PROC_INT(evx_file_unlink_switch, evx_file_unlink_switch)
+EVX_DEFINE_PROC_INT(evx_clm_enable, evx_clm_enable)
+EVX_DEFINE_PROC_INT(evx_clm_mux_switch, evx_clm_mux_switch)
+EVX_DEFINE_PROC_INT(evx_clm_highload_all, evx_clm_highload_all)
+EVX_DEFINE_PROC_INT(evx_clm_highload_grp, evx_clm_highload_grp)
+EVX_DEFINE_PROC_INT(evx_clm_report_threshold, evx_clm_report_threshold)
+EVX_DEFINE_PROC_INT(evx_clm_lowload_grp, evx_clm_lowload_grp)
+EVX_DEFINE_PROC_INT(evx_boost_pool_min, evx_boost_pool_min)
+
+static int evx_reset_stat_proc_show(struct seq_file *m, void *v)
+{
+	seq_puts(m, "0\n");
+	return 0;
+}
+static int evx_reset_stat_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, evx_reset_stat_proc_show, NULL);
+}
+static ssize_t evx_reset_stat_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+	return count;
+}
+static const struct proc_ops evx_io_reset_stat_proc_ops = {
+	.proc_open = evx_reset_stat_proc_open,
+	.proc_read = seq_read,
+	.proc_write = evx_reset_stat_proc_write,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
+static int ufs_lat_dist_proc_show(struct seq_file *m, void *v)
+{
+	seq_puts(m, "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n");
+	return 0;
+}
+static int ufs_lat_dist_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, ufs_lat_dist_proc_show, NULL);
+}
+static const struct proc_ops ufs_lat_dist_proc_ops = {
+	.proc_open = ufs_lat_dist_proc_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
+static int evx_clm_version_proc_show(struct seq_file *m, void *v)
+{
+	seq_puts(m, "1.0\n");
+	return 0;
+}
+static int evx_clm_version_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, evx_clm_version_proc_show, NULL);
+}
+static const struct proc_ops evx_clm_version_proc_ops = {
+	.proc_open = evx_clm_version_proc_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
+static int devinfo_lcd_proc_show(struct seq_file *m, void *v)
+{
+	seq_puts(m, "dsi_panel_active 120Hz\n");
+	return 0;
+}
+static int devinfo_lcd_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, devinfo_lcd_proc_show, NULL);
+}
+static const struct proc_ops devinfo_lcd_proc_ops = {
+	.proc_open = devinfo_lcd_proc_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
+};
+
 static int task_cpustats_proc_show(struct seq_file *m, void *v)
 {
 	struct task_struct *g;
@@ -894,7 +1042,64 @@ static int __init evx_cos_perf_compat_init(void)
 					proc_create("ufs_total_write_size_mb", 0444,
 						    proc_io_metrics_forever_dir,
 						    &ufs_total_write_size_mb_proc_ops);
+				proc_io_metrics_forever_read_lat =
+					proc_create("ufs_read_lat_dist", 0444,
+						    proc_io_metrics_forever_dir,
+						    &ufs_lat_dist_proc_ops);
+				proc_io_metrics_forever_write_lat =
+					proc_create("ufs_write_lat_dist", 0444,
+						    proc_io_metrics_forever_dir,
+						    &ufs_lat_dist_proc_ops);
 			}
+			proc_io_metrics_control_dir =
+				proc_mkdir("control", proc_io_metrics_dir);
+			if (proc_io_metrics_control_dir) {
+				proc_io_metrics_control_label =
+					proc_create("label", 0666,
+						    proc_io_metrics_control_dir,
+						    &evx_io_label_proc_ops);
+				proc_io_metrics_control_top_app_monitor =
+					proc_create("top_app_monitor", 0666,
+						    proc_io_metrics_control_dir,
+						    &evx_io_top_app_monitor_proc_ops);
+				proc_io_metrics_control_reset_stat =
+					proc_create("reset_stat", 0666,
+						    proc_io_metrics_control_dir,
+						    &evx_io_reset_stat_proc_ops);
+			}
+		}
+		proc_file_monitor_dir = proc_mkdir("file_monitor", proc_oplus_storage_dir);
+		if (proc_file_monitor_dir) {
+			proc_file_monitor_remove_event =
+				proc_create("remove_event", 0666,
+					    proc_file_monitor_dir,
+					    &evx_file_remove_event_proc_ops);
+			proc_file_monitor_unlink_switch =
+				proc_create("unlink_switch", 0666,
+					    proc_file_monitor_dir,
+					    &evx_file_unlink_switch_proc_ops);
+		}
+	}
+
+	proc_jank_info_dir = proc_mkdir("jank_info", NULL);
+	if (proc_jank_info_dir) {
+		proc_cpu_jank_info_dir = proc_mkdir("cpu_jank_info", proc_jank_info_dir);
+		if (proc_cpu_jank_info_dir) {
+			proc_clm_version = proc_create("version", 0444, proc_cpu_jank_info_dir, &evx_clm_version_proc_ops);
+			proc_clm_enable = proc_create("clm_enable", 0666, proc_cpu_jank_info_dir, &evx_clm_enable_proc_ops);
+			proc_clm_mux_switch = proc_create("clm_mux_switch", 0666, proc_cpu_jank_info_dir, &evx_clm_mux_switch_proc_ops);
+			proc_clm_highload_all = proc_create("clm_highload_all", 0666, proc_cpu_jank_info_dir, &evx_clm_highload_all_proc_ops);
+			proc_clm_highload_grp = proc_create("clm_highload_grp", 0666, proc_cpu_jank_info_dir, &evx_clm_highload_grp_proc_ops);
+			proc_clm_report_threshold = proc_create("clm_report_threshold", 0666, proc_cpu_jank_info_dir, &evx_clm_report_threshold_proc_ops);
+			proc_clm_lowload_grp = proc_create("clm_lowload_grp", 0666, proc_cpu_jank_info_dir, &evx_clm_lowload_grp_proc_ops);
+		}
+	}
+
+	proc_boost_pool_dir = proc_mkdir("boost_pool", NULL);
+	if (proc_boost_pool_dir) {
+		proc_boost_pool_mtk_mm_dir = proc_mkdir("mtk_mm", proc_boost_pool_dir);
+		if (proc_boost_pool_mtk_mm_dir) {
+			proc_boost_pool_min = proc_create("min", 0666, proc_boost_pool_mtk_mm_dir, &evx_boost_pool_min_proc_ops);
 		}
 	}
 
@@ -936,10 +1141,14 @@ static int __init evx_cos_perf_compat_init(void)
 	}
 
 	proc_devinfo_dir = proc_mkdir("devinfo", NULL);
-	if (proc_devinfo_dir)
+	if (proc_devinfo_dir) {
 		proc_devinfo_ufsplus_status =
 			proc_create("ufsplus_status", 0444, proc_devinfo_dir,
 				    &ufsplus_status_proc_ops);
+		proc_devinfo_lcd =
+			proc_create("lcd", 0444, proc_devinfo_dir,
+				    &devinfo_lcd_proc_ops);
+	}
 
 	proc_ufs_signal_dir = proc_mkdir("ufs_signalShow", NULL);
 	if (proc_ufs_signal_dir)
@@ -1058,10 +1267,59 @@ static void __exit evx_cos_perf_compat_exit(void)
 		proc_remove(proc_ufs_signal_record_upload);
 	if (proc_ufs_signal_dir)
 		proc_remove(proc_ufs_signal_dir);
+	if (proc_devinfo_lcd)
+		proc_remove(proc_devinfo_lcd);
 	if (proc_devinfo_ufsplus_status)
 		proc_remove(proc_devinfo_ufsplus_status);
 	if (proc_devinfo_dir)
 		proc_remove(proc_devinfo_dir);
+
+	if (proc_boost_pool_min)
+		proc_remove(proc_boost_pool_min);
+	if (proc_boost_pool_mtk_mm_dir)
+		proc_remove(proc_boost_pool_mtk_mm_dir);
+	if (proc_boost_pool_dir)
+		proc_remove(proc_boost_pool_dir);
+
+	if (proc_clm_lowload_grp)
+		proc_remove(proc_clm_lowload_grp);
+	if (proc_clm_report_threshold)
+		proc_remove(proc_clm_report_threshold);
+	if (proc_clm_highload_grp)
+		proc_remove(proc_clm_highload_grp);
+	if (proc_clm_highload_all)
+		proc_remove(proc_clm_highload_all);
+	if (proc_clm_mux_switch)
+		proc_remove(proc_clm_mux_switch);
+	if (proc_clm_enable)
+		proc_remove(proc_clm_enable);
+	if (proc_clm_version)
+		proc_remove(proc_clm_version);
+	if (proc_cpu_jank_info_dir)
+		proc_remove(proc_cpu_jank_info_dir);
+	if (proc_jank_info_dir)
+		proc_remove(proc_jank_info_dir);
+
+	if (proc_file_monitor_unlink_switch)
+		proc_remove(proc_file_monitor_unlink_switch);
+	if (proc_file_monitor_remove_event)
+		proc_remove(proc_file_monitor_remove_event);
+	if (proc_file_monitor_dir)
+		proc_remove(proc_file_monitor_dir);
+
+	if (proc_io_metrics_control_reset_stat)
+		proc_remove(proc_io_metrics_control_reset_stat);
+	if (proc_io_metrics_control_top_app_monitor)
+		proc_remove(proc_io_metrics_control_top_app_monitor);
+	if (proc_io_metrics_control_label)
+		proc_remove(proc_io_metrics_control_label);
+	if (proc_io_metrics_control_dir)
+		proc_remove(proc_io_metrics_control_dir);
+
+	if (proc_io_metrics_forever_write_lat)
+		proc_remove(proc_io_metrics_forever_write_lat);
+	if (proc_io_metrics_forever_read_lat)
+		proc_remove(proc_io_metrics_forever_read_lat);
 
 	if (evx_zram0_dev) {
 		device_remove_file(evx_zram0_dev,

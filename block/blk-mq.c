@@ -54,6 +54,10 @@ static DEFINE_PER_CPU(struct llist_head, blk_cpu_done);
 static DEFINE_PER_CPU(call_single_data_t, blk_cpu_csd);
 static DEFINE_MUTEX(blk_mq_cpuhp_lock);
 
+static int block_graded_thread_enable = 1;
+module_param_named(block_graded_thread_enable, block_graded_thread_enable, int, 0644);
+MODULE_PARM_DESC(block_graded_thread_enable, "Oplus block graded thread enable");
+
 static void blk_mq_insert_request(struct request *rq, blk_insert_t flags);
 static void blk_mq_request_bypass_insert(struct request *rq,
 		blk_insert_t flags);
