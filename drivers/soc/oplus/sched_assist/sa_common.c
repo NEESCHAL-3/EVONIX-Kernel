@@ -2005,34 +2005,6 @@ void android_vh_sched_setaffinity_early_handler(void *unused, struct task_struct
 
 #ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
 
-static inline s64 entity_key(struct cfs_rq *cfs_rq, struct sched_entity *se)
-{
-	return (s64)(se->vruntime - cfs_rq->min_vruntime);
-}
-
-u64 avg_vruntime(struct cfs_rq *cfs_rq)
-{
-	struct sched_entity *curr = cfs_rq->curr;
-	s64 avg = cfs_rq->avg_vruntime;
-	long load = cfs_rq->avg_load;
-
-	if (curr && curr->on_rq) {
-		unsigned long weight = scale_load_down(curr->load.weight);
-
-		avg += entity_key(cfs_rq, curr) * weight;
-		load += weight;
-	}
-
-	if (load) {
-		/* sign flips effective floor / ceil */
-		if (avg < 0)
-			avg -= (load - 1);
-		avg = div_s64(avg, load);
-	}
-
-	return cfs_rq->min_vruntime + avg;
-}
-
 static inline void update_load_set(struct load_weight *lw, unsigned long w)
 {
 	lw->weight = w;

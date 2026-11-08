@@ -2349,7 +2349,7 @@ static unsigned long real_scale_rt_capacity(int cpu)
 	return real_scale_irq_capacity(free, irq, max);
 }
 #endif
-inline unsigned long capacity_of(int cpu)
+static inline unsigned long capacity_of(int cpu)
 {
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_VT_CAP)
 	if (eas_opt_enable && !force_apply_ocap_enable)

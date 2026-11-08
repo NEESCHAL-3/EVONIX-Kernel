@@ -4,6 +4,7 @@
  */
 #include <linux/version.h>
 #include <linux/plist.h>
+#include <linux/kthread.h>
 #include <linux/sched/cputime.h>
 #include <linux/cpuidle.h>
 #include <trace/hooks/sched.h>
@@ -269,116 +270,6 @@ void oplus_loadbalance_systrace_print(
 	}
 }
 
-/******** The following code is copied from lib/plist.c. ********/
-#ifdef CONFIG_DEBUG_PLIST
-
-static struct plist_head test_head;
-
-static void plist_check_prev_next(struct list_head *t, struct list_head *p,
-				  struct list_head *n)
-{
-	WARN(n->prev != p || p->next != n,
-			"top: %p, n: %p, p: %p\n"
-			"prev: %p, n: %p, p: %p\n"
-			"next: %p, n: %p, p: %p\n",
-			 t, t->next, t->prev,
-			p, p->next, p->prev,
-			n, n->next, n->prev);
-}
-
-static void plist_check_list(struct list_head *top)
-{
-	struct list_head *prev = top, *next = top->next;
-
-	plist_check_prev_next(top, prev, next);
-	while (next != top) {
-		prev = next;
-		next = prev->next;
-		plist_check_prev_next(top, prev, next);
-	}
-}
-
-static void plist_check_head(struct plist_head *head)
-{
-	if (!plist_head_empty(head))
-		plist_check_list(&plist_first(head)->prio_list);
-	plist_check_list(&head->node_list);
-}
-
-#else
-# define plist_check_head(h)	do { } while (0)
-#endif
-
-/**
- * plist_add - add @node to @head
- *
- * @node:	&struct plist_node pointer
- * @head:	&struct plist_head pointer
- */
-void plist_add(struct plist_node *node, struct plist_head *head)
-{
-	struct plist_node *first, *iter, *prev = NULL;
-	struct list_head *node_next = &head->node_list;
-
-	plist_check_head(head);
-	WARN_ON(!plist_node_empty(node));
-	WARN_ON(!list_empty(&node->prio_list));
-
-	if (plist_head_empty(head))
-		goto ins_node;
-
-	first = iter = plist_first(head);
-
-	do {
-		if (node->prio < iter->prio) {
-			node_next = &iter->node_list;
-			break;
-		}
-
-		prev = iter;
-		iter = list_entry(iter->prio_list.next,
-				struct plist_node, prio_list);
-	} while (iter != first);
-
-	if (!prev || prev->prio != node->prio)
-		list_add_tail(&node->prio_list, &iter->prio_list);
-ins_node:
-	list_add_tail(&node->node_list, node_next);
-
-	plist_check_head(head);
-}
-
-/**
- * plist_del - Remove a @node from plist.
- *
- * @node:	&struct plist_node pointer - entry to be removed
- * @head:	&struct plist_head pointer - list head
- */
-void plist_del(struct plist_node *node, struct plist_head *head)
-{
-	plist_check_head(head);
-
-	if (!list_empty(&node->prio_list)) {
-		if (node->node_list.next != &head->node_list) {
-			struct plist_node *next;
-
-			next = list_entry(node->node_list.next,
-					struct plist_node, node_list);
-
-			/* add the next plist_node into prio_list */
-			if (list_empty(&next->prio_list))
-				list_add(&next->prio_list, &node->prio_list);
-		}
-		list_del_init(&node->prio_list);
-	}
-
-	list_del_init(&node->node_list);
-
-	plist_check_head(head);
-}
-
-/******** The code above is copied from lib/plist.c. ********/
-
 /******** The following code is copied from fair.c ********/
 enum fbq_type { regular, remote, all };
 
@@ -483,7 +374,7 @@ static inline int migrate_degrades_locality(struct task_struct *p,
 }
 #endif
 
-const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
+extern unsigned int sysctl_sched_migration_cost;
 
 /*
  * Is this task likely cache-hot:
@@ -576,16 +467,6 @@ static inline struct kthread *__to_kthread(struct task_struct *p)
 	if (kthread && !(p->flags & PF_KTHREAD))
 		kthread = NULL;
 	return kthread;
-}
-
-bool kthread_is_per_cpu(struct task_struct *p)
-{
-	struct kthread *kthread = __to_kthread(p);
-
-	if (!kthread)
-		return false;
-
-	return test_bit(KTHREAD_IS_PER_CPU, &kthread->flags);
 }
 
 /*
@@ -2824,12 +2705,12 @@ __maybe_unused static void oplus_tick_balance(void *data, struct rq *rq)
 #define MAX_CPU		(OPLUS_NR_CPUS - 1)
 #define PERCENTAGE	100
 
-inline unsigned long capacity_of(int cpu)
+static inline unsigned long capacity_of(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity;
 }
 
-inline unsigned long cpu_util(int cpu)
+static inline unsigned long cpu_util(int cpu)
 {
 	struct cfs_rq *cfs_rq;
 	unsigned int util;

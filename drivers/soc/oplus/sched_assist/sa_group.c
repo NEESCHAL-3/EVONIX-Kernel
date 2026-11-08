@@ -26,7 +26,8 @@ static ssize_t tg_map_read(struct file *file, char __user *buf,
 	}
 	rcu_read_unlock();
 
-	buffer[len-1] = '\n';
+	if (len > 0)
+		buffer[len-1] = '\n';
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 };
