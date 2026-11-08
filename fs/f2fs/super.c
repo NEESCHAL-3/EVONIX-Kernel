@@ -179,6 +179,7 @@ enum {
 	Opt_age_extent_cache,
 	Opt_errors,
 	Opt_lookup_mode,
+	Opt_whint_mode,
 	Opt_err,
 };
 
@@ -260,6 +261,7 @@ static match_table_t f2fs_tokens = {
 	{Opt_age_extent_cache, "age_extent_cache"},
 	{Opt_errors, "errors=%s"},
 	{Opt_lookup_mode, "lookup_mode=%s"},
+	{Opt_whint_mode, "whint_mode=%s"},
 	{Opt_err, NULL},
 };
 
@@ -1337,6 +1339,17 @@ static int parse_options(struct super_block *sb, char *options, bool is_remount)
 				kfree(name);
 				return -EINVAL;
 			}
+			kfree(name);
+			break;
+		case Opt_whint_mode:
+			name = match_strdup(&args[0]);
+			if (!name)
+				return -ENOMEM;
+			/*
+			 * ColorOS libfs_mgr passes whint_mode=fs-based.
+			 * Write life hints were removed in modern Linux kernels;
+			 * safely accept the option so mount succeeds cleanly.
+			 */
 			kfree(name);
 			break;
 		default:

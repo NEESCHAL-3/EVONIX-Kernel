@@ -8,6 +8,7 @@
 #define __MIDAS_DEV_H__
 
 #include <linux/cdev.h>
+#include <linux/mutex.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <trace/hooks/cpufreq.h>
@@ -27,7 +28,16 @@ enum {
         MMAP_TYPE_MAX,
 };
 
+struct midas_resume_info {
+	long last_suspend_time;
+	long last_resume_time;
+	long last_resume_boot_time;
+	long last_suspend_millsec_time;
+	long last_resume_millsec_time;
+};
+
 struct midas_dev_info {
+	struct midas_resume_info resume;
         unsigned int version;
         dev_t devno;
         struct cdev cdev;
@@ -36,6 +46,8 @@ struct midas_dev_info {
 
 struct midas_priv_info {
         int type;
+	struct mutex control_lock;
+	bool state_overflow;
         struct list_head list;
         spinlock_t lock;
         unsigned int avail;

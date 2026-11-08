@@ -1,4 +1,7 @@
 #include <linux/init.h>
+#include <linux/cred.h>
+#include "evonix_cos_cpu_tables.h"
+#include "evonix_cos_task_energy.h"
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
@@ -61,14 +64,56 @@ static int __init evx_cos_proc_compat_init(void)
 	task_info = proc_mkdir("task_info", NULL);
 	if (task_info) {
 		task_cpustats = proc_mkdir("task_cpustats", task_info);
-		if (task_cpustats)
-			proc_create("task_cpustats_enable", 0666,
-				    task_cpustats, &evx_one_rw_ops);
+		if (task_cpustats) {
+			struct proc_dir_entry *enable;
+
+			enable = proc_create("task_cpustats_enable",
+				IS_ENABLED(CONFIG_EVONIX_OPLUS_TASK_ENERGY) ? 0660 : 0666,
+				task_cpustats, IS_ENABLED(CONFIG_EVONIX_OPLUS_TASK_ENERGY) ?
+				&evx_task_energy_enable_proc_ops : &evx_one_rw_ops);
+			if (enable && IS_ENABLED(CONFIG_EVONIX_OPLUS_TASK_ENERGY))
+				proc_set_user(enable, KUIDT_INIT(1000), KGIDT_INIT(1000));
+			proc_create("sgeinfo", 0444,
+				    task_cpustats, &evx_sgeinfo_proc_ops);
+			proc_create("sgefreqinfo", 0444,
+				    task_cpustats, &evx_sgefreqinfo_proc_ops);
+		}
+
+		{
+			struct proc_dir_entry *task_load = proc_mkdir("task_load_info", task_info);
+			if (task_load) {
+				proc_create("monitor_status", 0666, task_load, &evx_zero_rw_ops);
+				proc_create("normalize_real_time", 0666, task_load, &evx_zero_rw_ops);
+				proc_create("normalize_running_time", 0666, task_load, &evx_zero_rw_ops);
+				proc_create("real_time", 0666, task_load, &evx_zero_rw_ops);
+				proc_create("running_time", 0666, task_load, &evx_zero_rw_ops);
+				proc_create("target_process", 0666, task_load, &evx_zero_rw_ops);
+			}
+		}
+
+		{
+			struct proc_dir_entry *task_sched = proc_mkdir("task_sched_info", task_info);
+			if (task_sched) {
+				proc_create("d_backtrace", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("d_convert", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("io_backtrace", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("limit_table", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("pids_set", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("sched_info_threshold", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("task_sched_info_enable", 0666, task_sched, &evx_one_rw_ops);
+				proc_create("tids_set", 0666, task_sched, &evx_zero_rw_ops);
+				proc_create("version", 0444, task_sched, &evx_one_rw_ops);
+			}
+		}
 	}
 
-	healthinfo = proc_mkdir("oplus_healthinfo", NULL);
-	if (healthinfo)
-		proc_create("alloc_wait", 0666, healthinfo, &evx_zero_rw_ops);
+	/* Native health providers own this directory when selected. */
+	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_CPU_JANKINFO) &&
+	    !IS_ENABLED(CONFIG_EVONIX_OPLUS_HEALTHINFO_LITE)) {
+		healthinfo = proc_mkdir("oplus_healthinfo", NULL);
+		if (healthinfo)
+			proc_create("alloc_wait", 0666, healthinfo, &evx_zero_rw_ops);
+	}
 
 	/* Use compatibility nodes only when native OPlus SchedAssist is absent. */
 	if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)) {
@@ -84,13 +129,15 @@ static int __init evx_cos_proc_compat_init(void)
 			       0666, &evx_one_rw_ops);
 	}
 
-	/* OPlus frame boost compatibility */
-	proc_mkdir("oplus_frame_boost", NULL);
-	evx_proc_touch("oplus_frame_boost/sys_ctrl", 0666, &evx_zero_rw_ops);
-	evx_proc_touch("oplus_frame_boost/ctrl", 0666, &evx_zero_rw_ops);
+	/* The native protocol owns this tree when selected. */
+	if (!IS_ENABLED(CONFIG_EVONIX_OPLUS_FRAME_IOCTL)) {
+		proc_mkdir("oplus_frame_boost", NULL);
+		evx_proc_touch("oplus_frame_boost/sys_ctrl", 0666, &evx_zero_rw_ops);
+		evx_proc_touch("oplus_frame_boost/ctrl", 0666, &evx_zero_rw_ops);
+	}
 
 
-	pr_info("EVONIX-COS: proc compat v30 task_cpustats, healthinfo, schedassist, frameboost ready\n");
+	pr_info("EVONIX-COS: compatibility interface registration complete\n");
 	return 0;
 }
 late_initcall(evx_cos_proc_compat_init);

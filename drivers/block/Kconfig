@@ -106,6 +106,7 @@ config GDROM
 source "drivers/block/mtip32xx/Kconfig"
 
 source "drivers/block/zram/Kconfig"
+source "drivers/block/oplus_hybridswap/Kconfig"
 
 config BLK_DEV_UBD
 	bool "Virtual block device"

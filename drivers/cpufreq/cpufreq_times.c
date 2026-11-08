@@ -151,6 +151,23 @@ void cpufreq_acct_update_power(struct task_struct *p, u64 cputime)
 	trace_android_vh_cpufreq_acct_update_power(cputime, p, state);
 }
 
+/* The policy frequency arrays are immutable and retained after creation. */
+unsigned int cpufreq_times_lookup_frequency(unsigned int cpu, unsigned int state)
+{
+	const struct cpu_freqs *freqs;
+	unsigned int index;
+
+	if (cpu >= nr_cpu_ids)
+		return 0;
+	freqs = READ_ONCE(all_freqs[cpu]);
+	if (!freqs || state < freqs->offset)
+		return 0;
+	index = state - freqs->offset;
+	if (index >= freqs->max_state)
+		return 0;
+	return freqs->freq_table[index];
+}
+
 static int cpufreq_times_get_index(struct cpu_freqs *freqs, unsigned int freq)
 {
 	int index;

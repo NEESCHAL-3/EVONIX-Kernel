@@ -469,6 +469,12 @@ int register_device_proc(char *name, char *version, char *vendor)
 }
 EXPORT_SYMBOL(register_device_proc);
 
+struct proc_dir_entry *get_devinfo_proc_dir(void)
+{
+	return g_parent;
+}
+EXPORT_SYMBOL(get_devinfo_proc_dir);
+
 static int parse_gpio_dts(struct device *dev, struct device_info *dev_info)
 {
 #if defined(CONFIG_MTK_PLATFORM) || defined(CONFIG_OPLUS_DEVICE_INFO_MTK_PLATFORM)

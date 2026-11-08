@@ -88,6 +88,7 @@ static int max_sf_migr_gpu = 0;
 static int max_sf_migr_nongpu = 0;
 
 struct list_head cluster_head;
+struct oplus_sched_cluster *fb_cluster[MAX_CLS_NUM];
 #define for_each_sched_cluster(cluster) \
 	list_for_each_entry_rcu(cluster, &cluster_head, list)
 
@@ -149,16 +150,21 @@ static void cleanup_clusters(struct list_head *head)
 	list_for_each_entry_safe(cluster, tmp, head, list) {
 		list_del(&cluster->list);
 		num_sched_clusters--;
+		if (cluster->id >= 0 && cluster->id < MAX_CLS_NUM &&
+		    fb_cluster[cluster->id] == cluster)
+			fb_cluster[cluster->id] = NULL;
 		kfree(cluster);
 	}
+	memset(fb_cluster, 0, sizeof(fb_cluster));
 }
 
 static struct oplus_sched_cluster *alloc_new_cluster(const struct cpumask *cpus)
 {
 	struct oplus_sched_cluster *cluster = NULL;
 
-	cluster = kzalloc(sizeof(struct oplus_sched_cluster), GFP_ATOMIC);
-	BUG_ON(!cluster);
+	cluster = kzalloc(sizeof(*cluster), GFP_KERNEL);
+	if (!cluster)
+		return NULL;
 
 	INIT_LIST_HEAD(&cluster->list);
 	cluster->cpus = *cpus;
@@ -166,9 +172,7 @@ static struct oplus_sched_cluster *alloc_new_cluster(const struct cpumask *cpus)
 	return cluster;
 }
 
-struct oplus_sched_cluster *fb_cluster[MAX_CLS_NUM];
-
-static inline void add_cluster(const struct cpumask *cpus, struct list_head *head)
+static inline bool add_cluster(const struct cpumask *cpus, struct list_head *head)
 {
 	unsigned long capacity = 0, insert_capacity = 0;
 	struct oplus_sched_cluster *cluster = NULL;
@@ -186,12 +190,14 @@ static inline void add_cluster(const struct cpumask *cpus, struct list_head *hea
 		}
 	}
 
+	if (num_sched_clusters >= MAX_CLS_NUM)
+		return false;
 	cluster = alloc_new_cluster(cpus);
+	if (!cluster)
+		return false;
 	insert_cluster(cluster, head);
-
-	fb_cluster[num_sched_clusters] = cluster;
-
-	num_sched_clusters++;
+	fb_cluster[num_sched_clusters++] = cluster;
+	return true;
 }
 
 static inline void assign_cluster_ids(struct list_head *head)
@@ -222,7 +228,10 @@ static bool build_clusters(void)
 			return false;
 		}
 		cpumask_andnot(&cpus, &cpus, &cluster_cpus);
-		add_cluster(&cluster_cpus, &new_head);
+		if (!add_cluster(&cluster_cpus, &new_head)) {
+			cleanup_clusters(&new_head);
+			return false;
+		}
 	}
 
 	assign_cluster_ids(&new_head);
@@ -2191,7 +2200,7 @@ void fbg_android_rvh_schedule_handler(struct task_struct *prev,
 			cpu_val_systrace_c(ots->fbg_state, cpu_of(rq), "fbg_state", fbg_state);
 	}
 
-	if (atomic_read(&fbg_initialized) == 0)
+	if (atomic_read_acquire(&fbg_initialized) == 0)
 		return;
 
 	if (unlikely(prev == next))
@@ -2210,7 +2219,7 @@ void fbg_android_rvh_cpufreq_transition(struct cpufreq_policy *policy)
 	struct rq *rq;
 	int cpu;
 
-	if (atomic_read(&fbg_initialized) == 0)
+	if (atomic_read_acquire(&fbg_initialized) == 0)
 		return;
 
 	for_each_cpu(cpu, policy->cpus) {
@@ -3242,7 +3251,7 @@ int frame_group_init(void)
 	struct oplus_sched_cluster *cluster = NULL;
 
 	for (i = 1; i < MAX_NUM_FBG_ID; i++) {
-		grp = kzalloc(sizeof(*grp), GFP_NOWAIT);
+		grp = kzalloc(sizeof(*grp), GFP_KERNEL);
 		if (!grp) {
 			ret = -ENOMEM;
 			goto out;
@@ -3289,8 +3298,19 @@ int frame_group_init(void)
 
 	init_irq_work(&game_ed_irq_work, fbg_game_ed_irq_work);
 
-	atomic_set(&fbg_initialized, 1);
 
 out:
+	if (ret) {
+		for (i = 1; i < MAX_NUM_FBG_ID; i++) {
+			kfree(frame_boost_groups[i]);
+			frame_boost_groups[i] = NULL;
+		}
+	}
 	return ret;
+}
+
+/* Publish only after frame information, timers and callbacks are initialized. */
+void frame_group_activate(void)
+{
+	atomic_set_release(&fbg_initialized, 1);
 }

@@ -34,7 +34,6 @@
 #define MAX_USER_CNT		10
 #define MAX_RASMEVENT_PARAM	7
 
-static char *rasm_env[MAX_RASMEVENT_PARAM];
 static LIST_HEAD(user_list);
 static DEFINE_SPINLOCK(user_lock);
 static atomic_t user_cnt = ATOMIC_INIT(0);
@@ -59,26 +58,20 @@ struct spinlock *get_user_lock(void)
 #endif
 
 
-struct rasm_data {
-	long last_suspend_time;
-	long last_resume_time;
-	long last_resume_boot_time;
-	long last_suspend_millsec_time;
-	long last_resume_millsec_time;
-};
-
 static int rasm_resume(struct device *dev) {
 	struct timespec64 resume_time;
 	struct timespec64 resume_boot_time;
-	struct rasm_data *data;
+	struct midas_resume_info *data;
+	struct midas_dev_info *info = dev_get_drvdata(dev);
 	int index = 0;
 	int i;
+	char *rasm_env[MAX_RASMEVENT_PARAM] = { };
 
-	data = dev->driver_data;
-	if (!data) {
+	if (!info) {
 		pr_err("rasm_data is empty");
 		return 0;
 	}
+	data = &info->resume;
 	ktime_get_real_ts64(&resume_time);
 	data->last_resume_time = resume_time.tv_sec;
 	data->last_resume_millsec_time = resume_time.tv_sec * 1000 + resume_time.tv_nsec / NSEC_PER_MSEC;
@@ -94,10 +87,13 @@ static int rasm_resume(struct device *dev) {
 	rasm_env[index++] = kasprintf(GFP_KERNEL, "suspend_millsec=%ld", data->last_suspend_millsec_time);
 	rasm_env[index++] = NULL;
 
-        if (index > ARRAY_SIZE(rasm_env))
-		BUG();
-
+	/* Never publish a truncated event after an allocation failure. */
+	for (i = 0; i < index - 1; i++) {
+		if (!rasm_env[i])
+			goto free_env;
+	}
 	kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, rasm_env);
+free_env:
 	for (i = 0; i < index - 1; ++i)
 		kfree(rasm_env[i]);
 	return 0;
@@ -105,13 +101,14 @@ static int rasm_resume(struct device *dev) {
 
 static int rasm_suspend(struct device *dev) {
 	struct timespec64 suspend_time;
-	struct rasm_data *data;
+	struct midas_resume_info *data;
+	struct midas_dev_info *info = dev_get_drvdata(dev);
 
-	data = dev->driver_data;
-	if (!data) {
+	if (!info) {
 		pr_err("rasm_data is empty");
 		return 0;
 	}
+	data = &info->resume;
 	ktime_get_real_ts64(&suspend_time);
 	data->last_suspend_time = suspend_time.tv_sec;
 	data->last_suspend_millsec_time = suspend_time.tv_sec * 1000 + suspend_time.tv_nsec / NSEC_PER_MSEC;
@@ -126,35 +123,40 @@ static const struct dev_pm_ops rasm_pm_ops = {
 
 static int midas_dev_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-	int ret = 0;
-
 	struct midas_priv_info *info = filp->private_data;
-	if (IS_ERR_OR_NULL(info))
+	void *addr;
+	unsigned long flags;
+	int ret;
+
+	if (!info)
 		return -EINVAL;
-
-	if (info->type < 0 || info->type >= MMAP_TYPE_MAX) {
-		pr_err("mmap type=%d is invalid!\n", info->type);
-		return -EINVAL;
+	mutex_lock(&info->control_lock);
+	if (info->type < 0 || info->type >= MMAP_TYPE_MAX ||
+	    vma->vm_pgoff || !(vma->vm_flags & VM_SHARED) ||
+	    vma->vm_end - vma->vm_start > PAGE_ALIGN(mmap_size_tbl[info->type])) {
+		ret = -EINVAL;
+		goto out;
 	}
-
-	info->mmap_addr = vmalloc_user(mmap_size_tbl[info->type]);
-	if (IS_ERR_OR_NULL(info->mmap_addr)) {
-		pr_err("mmap_addr vmalloc failed!\n");
-		return -ENOMEM;
+	/* A second mapping must share the original allocation, not replace it. */
+	addr = info->mmap_addr;
+	if (!addr) {
+		addr = vmalloc_user(mmap_size_tbl[info->type]);
+		if (!addr) {
+			ret = -ENOMEM;
+			goto out;
+		}
 	}
-
-	if (remap_vmalloc_range(vma, info->mmap_addr,
-		  vma->vm_pgoff)) {
-		pr_err("remap failed\n");
-		ret = -EAGAIN;
-		goto err_remap;
+	ret = remap_vmalloc_range(vma, addr, 0);
+	if (ret) {
+		if (!info->mmap_addr)
+			vfree(addr);
+		goto out;
 	}
-
-	return 0;
-
-err_remap:
-	vfree(info->mmap_addr);
-	info->mmap_addr = NULL;
+	spin_lock_irqsave(&info->lock, flags);
+	info->mmap_addr = addr;
+	spin_unlock_irqrestore(&info->lock, flags);
+out:
+	mutex_unlock(&info->control_lock);
 	return ret;
 }
 
@@ -163,16 +165,20 @@ static int midas_dev_open(struct inode *inode, struct file *filp)
 	struct midas_priv_info *info;
 	unsigned long flags;
 
-	if (atomic_read(&user_cnt) >= MAX_USER_CNT) {
+	if (atomic_inc_return(&user_cnt) > MAX_USER_CNT) {
+		atomic_dec(&user_cnt);
 		pr_err("user_cnt=%d, open failed\n", atomic_read(&user_cnt));
 		return -EINVAL;
 	}
 
 	info = kzalloc(sizeof(struct midas_priv_info), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(info))
+	if (!info) {
+		atomic_dec(&user_cnt);
 		return -ENOMEM;
+	}
 
 	info->type = -1;
+	mutex_init(&info->control_lock);
 	info->mmap_addr = NULL;
 	spin_lock_init(&info->lock);
 	info->removing = false;
@@ -182,8 +188,7 @@ static int midas_dev_open(struct inode *inode, struct file *filp)
 	list_add(&info->list, &user_list);
 	spin_unlock_irqrestore(&user_lock, flags);
 
-	atomic_inc(&user_cnt);
-	pr_info("user_cnt=%d\n", atomic_read(&user_cnt));
+	pr_debug("user_cnt=%d\n", atomic_read(&user_cnt));
 	return 0;
 }
 
@@ -194,21 +199,14 @@ static int midas_dev_release(struct inode *inode, struct file *filp)
 	if (IS_ERR_OR_NULL(info))
 		return 0;
 
-	spin_lock_irqsave(&info->lock, flags);
-	info->removing = true;
-	spin_unlock_irqrestore(&info->lock, flags);
-
-	if (info->mmap_addr != NULL) {
-		vfree(info->mmap_addr);
-		info->mmap_addr = NULL;
-	}
-
+	/* Removing from the producer list drains any current callback. */
 	spin_lock_irqsave(&user_lock, flags);
 	list_del(&info->list);
 	spin_unlock_irqrestore(&user_lock, flags);
+	vfree(info->mmap_addr);
 
 	atomic_dec(&user_cnt);
-	pr_info("user_cnt=%d\n", atomic_read(&user_cnt));
+	pr_debug("user_cnt=%d\n", atomic_read(&user_cnt));
 	kfree(info);
 	info = NULL;
 	return 0;
@@ -249,6 +247,7 @@ static int midas_pdev_probe(struct platform_device *pdev)
 
 	dev_info->class = class_create("midas");
 	if (IS_ERR_OR_NULL(dev_info->class)) {
+		ret = PTR_ERR(dev_info->class);
 		pr_err("Fail to create class, ret=%d\n", ret);
 		goto err_class_create;
 	}
@@ -257,6 +256,7 @@ static int midas_pdev_probe(struct platform_device *pdev)
 				dev_info, "midas_dev");
 
 	if (IS_ERR_OR_NULL(dev)) {
+		ret = PTR_ERR(dev);
 		pr_err("Fail to create device, ret=%d\n", ret);
 		goto err_device_create;
 	}

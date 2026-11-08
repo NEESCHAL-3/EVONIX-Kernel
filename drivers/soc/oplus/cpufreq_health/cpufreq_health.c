@@ -36,8 +36,6 @@ static struct eemsn_log *eemsn_log; /* eem data from csram */
 
 /* add for midas collection */
 static DEFINE_MUTEX(och_mutex);
-static struct cpufreq_health_info och_data[64];
-static int record_count;
 
 struct oplus_cpufreq_health_attr {
 	struct attribute attr;
@@ -427,42 +425,49 @@ void cpufreq_health_get_state(struct cpufreq_policy *policy)
 }
 EXPORT_SYMBOL_GPL(cpufreq_health_get_state);
 
-void update_och_data(void)
+int get_cpufreq_health_info_bounded(int *cnt,
+		struct cpufreq_health_info *val, unsigned int capacity)
 {
-	int cluster_id, i;
 	struct oplus_cpufreq_health *och;
 	unsigned long flags;
+	unsigned int count = 0, i;
+	int cluster, ret = 0;
 
-	record_count = 0;
-	for (cluster_id = 0; cluster_id < MAX_CLUSTERS; cluster_id++) {
-		och = &oplus_cpufreq_health[cluster_id];
-
+	if (!cnt || !val)
+		return -EINVAL;
+	*cnt = 0;
+	mutex_lock(&och_mutex);
+	for (cluster = 0; cluster < MAX_CLUSTERS; cluster++) {
+		och = &oplus_cpufreq_health[cluster];
+		if (!READ_ONCE(och->is_init))
+			continue;
 		spin_lock_irqsave(&och->lock, flags);
-
 		for (i = 0; i < och->len; i++) {
-			och_data[record_count].ceiling_time = och->table[i].ceiling_time;
-			och_data[record_count].ceiling_count = och->table[i].ceiling_count;
-			och_data[record_count].floor_time = och->table[i].floor_time;
-			och_data[record_count].floor_count = och->table[i].floor_count;
-			/* the sum of all cluster freq num is less than 64 */
-			record_count++;
+			if (count >= capacity) {
+				ret = -ENOSPC;
+				break;
+			}
+			val[count].ceiling_time = och->table[i].ceiling_time;
+			val[count].ceiling_count = och->table[i].ceiling_count;
+			val[count].floor_time = och->table[i].floor_time;
+			val[count].floor_count = och->table[i].floor_count;
+			count++;
 		}
-
 		spin_unlock_irqrestore(&och->lock, flags);
+		if (ret)
+			break;
 	}
+	if (!ret)
+		*cnt = count;
+	mutex_unlock(&och_mutex);
+	return ret;
 }
+EXPORT_SYMBOL_GPL(get_cpufreq_health_info_bounded);
 
+/* Legacy MIDAS v3 callers allocate exactly 60 entries. */
 void get_cpufreq_health_info(int *cnt, struct cpufreq_health_info *val)
 {
-	if (!val)
-		return;
-
-	update_och_data();
-	mutex_lock(&och_mutex);
-	*cnt = record_count;
-	memcpy(val, och_data, sizeof(struct cpufreq_health_info) * record_count);
-
-	mutex_unlock(&och_mutex);
+	get_cpufreq_health_info_bounded(cnt, val, 60);
 }
 EXPORT_SYMBOL_GPL(get_cpufreq_health_info);
 

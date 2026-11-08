@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config EVONIX_RODIN_ADAPTER_CLASS
+	bool "Rodin native MediaTek adapter class"
+	depends on ARM64 && KALLSYMS
+	help
+	  Provide the real MediaTek adapter class and publish Rodin's PD
+	  adapter before installing the charger's response notifier.

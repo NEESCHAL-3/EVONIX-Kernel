@@ -29,10 +29,15 @@ EXPORT_SYMBOL(jank_update_task_status);
 void jankinfo_android_rvh_enqueue_task_handler(void *unused,
 			struct rq *rq, struct task_struct *p, int flags)
 {
-	if (!p || !jank_update_task_status)
-		return;
+	jank_callback_t callback;
 
-	jank_update_task_status(p, TRACE_RUNNABLE, flags);
+	if (!p)
+		return;
+	rcu_read_lock();
+	callback = READ_ONCE(jank_update_task_status);
+	if (callback)
+		callback(p, TRACE_RUNNABLE, flags);
+	rcu_read_unlock();
 }
 
 #ifdef JANKINFO_DEBUG
@@ -57,9 +62,12 @@ void jankinfo_android_rvh_schedule_handler(void *unused,
 			struct task_struct *prev, struct task_struct *next, struct rq *rq)
 {
 	unsigned long nowtype = INVALID_TRACE_TYPE;
+	jank_callback_t callback;
 
-	if (!jank_update_task_status)
-		return;
+	rcu_read_lock();
+	callback = READ_ONCE(jank_update_task_status);
+	if (!callback)
+		goto out;
 
 	if (prev) {
 		if (prev->__state == TASK_RUNNING || prev->__state == TASK_WAKING) {
@@ -80,11 +88,13 @@ void jankinfo_android_rvh_schedule_handler(void *unused,
 				prev->comm, prev->__state, prev->__state);
 #endif
 		}
-		jank_update_task_status(prev, nowtype, 0);
+		callback(prev, nowtype, 0);
 	}
 
 	if (next)
-		jank_update_task_status(next, TRACE_RUNNING, 0);
+		callback(next, TRACE_RUNNING, 0);
+out:
+	rcu_read_unlock();
 }
 
 #endif

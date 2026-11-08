@@ -84,9 +84,22 @@ extern void cpufreq_health_get_edtask_state(int cpu, int edtask_flag);
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_OCH)
 void get_cpufreq_health_info(int *cnt, struct cpufreq_health_info *val);
+int get_cpufreq_health_info_bounded(int *cnt,
+		struct cpufreq_health_info *val, unsigned int capacity);
 extern int cpufreq_health_register(struct cpufreq_policy *policy);
 #else
-static inline void get_cpufreq_health_info(int *cnt, struct cpufreq_health_info *val) {}
+static inline int get_cpufreq_health_info_bounded(int *cnt,
+		struct cpufreq_health_info *val, unsigned int capacity)
+{
+	if (cnt)
+		*cnt = 0;
+	return -EOPNOTSUPP;
+}
+static inline void get_cpufreq_health_info(int *cnt, struct cpufreq_health_info *val)
+{
+	if (cnt)
+		*cnt = 0;
+}
 extern int cpufreq_health_register(struct cpufreq_policy *policy) { return 0; }
 #endif
 

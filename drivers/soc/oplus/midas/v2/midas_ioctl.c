@@ -55,7 +55,12 @@ static int midas_ioctl_set_mmap_type(void *kdata, void *priv_info)
 	int *type = kdata;
 	struct midas_priv_info *info = priv_info;
 
-	info->type = *type;
+	if (*type < 0 || *type >= MMAP_TYPE_MAX)
+		return -EINVAL;
+	if (info->mmap_addr && info->type != *type)
+		return -EBUSY;
+	/* Published mappings retain their type until the last file reference. */
+	WRITE_ONCE(info->type, *type);
 	return 0;
 }
 
@@ -78,15 +83,18 @@ long midas_dev_ioctl(struct file *filp,
 	midas_ioctl_t *func;
 	unsigned int nr = MIDAS_IOCTL_NR(cmd);
 	int ret = -EINVAL;
-	char kdata[KDATA_SIZE] = { };
+	u64 aligned_data[KDATA_SIZE / sizeof(u64)] = { };
+	void *kdata = aligned_data;
 	unsigned int in_size, out_size;
 
-	if (nr >=  MIDAS_CORE_IOCTL_CNT) {
+	if (!info || nr >= MIDAS_CORE_IOCTL_CNT) {
 		pr_err("out of array\n");
 		return -EINVAL;
 	}
 
 	ioctl = &midas_ioctls[nr];
+	if (cmd != ioctl->cmd || !ioctl->func)
+		return -ENOTTY;
 
 	out_size = in_size = _IOC_SIZE(cmd);
 	if ((cmd & IOC_IN) == 0)
@@ -113,7 +121,11 @@ long midas_dev_ioctl(struct file *filp,
 		goto err_fail_cp;
 	}
 
+	mutex_lock(&info->control_lock);
 	ret = func(kdata, info);
+	mutex_unlock(&info->control_lock);
+	if (ret)
+		return ret;
 
 	if (copy_to_user((void __user *)arg, kdata, out_size)) {
 		pr_err("copy_to_user failed\n");

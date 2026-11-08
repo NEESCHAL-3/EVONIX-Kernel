@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config EVONIX_OPLUS_FRAME_RATE
+	tristate "Rodin FrameBoost frame-rate adapter"
+	depends on ARM64 && OPLUS_FEATURE_FRAME_BOOST
+	default n
+	help
+	  Connect the Oplus performance HAL frame-rate request to the native
+	  FrameBoost SurfaceFlinger interval. This updates scheduling metadata,
+	  not the panel mode or CPU/GPU frequency limits.
+
+config EVONIX_OPLUS_TASK_ENERGY
+	bool "Rodin runtime-backed Oplus task energy estimates"
+	depends on ARM64 && CPU_FREQ_TIMES && ENERGY_MODEL
+	default n
+	help
+	  Provide the Oplus task_cpustats five-second process energy estimate
+	  format from real CPU accounting events and the CPU Energy Model.
+	  Collection allocates memory and attaches a hook only when enabled.

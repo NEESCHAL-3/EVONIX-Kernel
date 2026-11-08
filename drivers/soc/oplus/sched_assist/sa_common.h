@@ -258,6 +258,7 @@ struct oplus_rq {
 
 extern int global_debug_enabled;
 extern int global_sched_assist_enabled;
+extern bool evonix_sa_initialized;
 extern int global_sched_assist_scene;
 extern int global_silver_perf_core;
 extern int global_sched_group_enabled;

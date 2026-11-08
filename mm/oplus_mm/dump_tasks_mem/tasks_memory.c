@@ -16,6 +16,8 @@
 #include <linux/mm.h>
 #include <linux/version.h>
 #include <linux/memory_monitor.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
 
 #if IS_ENABLED(CONFIG_QCOM_KGSL)
 extern u64 kgsl_get_stats(pid_t pid);
@@ -35,14 +37,13 @@ static int show_uid_limit = 0;
 static int just_show_one_uid = JUST_IGNORE;
 static int just_show_one_pid = JUST_IGNORE;
 
-static struct process_mem pmem[1024];
-
 void update_user_tasklist(struct task_struct *tsk)
 {
 }
 
 static int memory_monitor_show(struct seq_file *m, void *p)
 {
+	struct process_mem *pmem;
 	struct task_struct *tsk;
 	unsigned long start = 0, rcu_lock_end = 0, end = 0, task_lock_start = 0,
 		      task_lock_end = 0, task_lock_time = 0, gpu_read_time = 0, gpu_read_start = 0;
@@ -50,6 +51,10 @@ static int memory_monitor_show(struct seq_file *m, void *p)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 	unsigned long ptes, pmds;
 #endif
+
+	pmem = kvcalloc(1024, sizeof(*pmem), GFP_KERNEL);
+	if (!pmem)
+		return -ENOMEM;
 
 	seq_printf(m, "-------------------------------------------------------\n");
 	seq_printf(m, "memory monitor[node_version:2] for ns\n");
@@ -91,7 +96,7 @@ static int memory_monitor_show(struct seq_file *m, void *p)
 		pmem[record_tasks].uid = task_uid(tsk).val;
 		memcpy(pmem[record_tasks].comm, tsk->comm, TASK_COMM_LEN);
 		pmem[record_tasks].oom_score_adj = tsk->signal->oom_score_adj;
-		pmem[record_tasks].rss = get_mm_rss(tsk->mm) << 2;
+		pmem[record_tasks].rss = get_mm_rss(tsk->mm) << (PAGE_SHIFT - 10);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
 		ptes = PTRS_PER_PTE * sizeof(pte_t) * atomic_long_read(&tsk->mm->nr_ptes);
 		pmds = PTRS_PER_PMD * sizeof(pmd_t) * mm_nr_pmds(tsk->mm);
@@ -101,8 +106,8 @@ static int memory_monitor_show(struct seq_file *m, void *p)
 		pmem[record_tasks].rss += atomic_long_read(&tsk->mm->pgtables_bytes) >> 10;
 #endif
 #endif
-		pmem[record_tasks].rssfile = get_mm_counter(tsk->mm, MM_FILEPAGES) << 2;
-		pmem[record_tasks].swapents_ori = get_mm_counter(tsk->mm, MM_SWAPENTS) << 2;
+		pmem[record_tasks].rssfile = get_mm_counter(tsk->mm, MM_FILEPAGES) << (PAGE_SHIFT - 10);
+		pmem[record_tasks].swapents_ori = get_mm_counter(tsk->mm, MM_SWAPENTS) << (PAGE_SHIFT - 10);
 		task_unlock(tsk);
 		gpu_read_start = sched_clock();
 		task_lock_end = sched_clock();
@@ -130,6 +135,7 @@ static int memory_monitor_show(struct seq_file *m, void *p)
 
 	seq_printf(m, "-------------------------------------------------------\n");
 
+	kvfree(pmem);
 	return 0;
 }
 
@@ -139,14 +145,14 @@ static int memory_monitor_open(struct inode *inode, struct file *file)
 }
 
 
-void mm_get_all_pmem(int *cnt, struct process_mem *val)
+int mm_get_all_pmem_bounded(int *cnt, struct process_mem *val, unsigned int capacity)
 {
 	struct task_struct *tsk;
-	int record_tasks = 0;
-	int i;
+	unsigned int record_tasks = 0, i;
+	int ret = 0;
 
-	if (!cnt || !val)
-		return;
+	if (!cnt || !val || !capacity)
+		return -EINVAL;
 
 	*cnt = 0;
 
@@ -166,6 +172,12 @@ void mm_get_all_pmem(int *cnt, struct process_mem *val)
 			continue;
 		}
 
+		if (record_tasks >= capacity) {
+			task_unlock(tsk);
+			ret = -ENOSPC;
+			break;
+		}
+
 		val[record_tasks].pid = tsk->pid;
 		val[record_tasks].ppid =
 			pid_alive(tsk) ?
@@ -181,7 +193,7 @@ void mm_get_all_pmem(int *cnt, struct process_mem *val)
 			tsk->signal->oom_score_adj;
 
 		val[record_tasks].rss =
-			get_mm_rss(tsk->mm) << 2;
+			get_mm_rss(tsk->mm) << (PAGE_SHIFT - 10);
 
 #ifdef CONFIG_MMU
 		val[record_tasks].rss +=
@@ -189,17 +201,14 @@ void mm_get_all_pmem(int *cnt, struct process_mem *val)
 #endif
 
 		val[record_tasks].rssfile =
-			get_mm_counter(tsk->mm, MM_FILEPAGES) << 2;
+			get_mm_counter(tsk->mm, MM_FILEPAGES) << (PAGE_SHIFT - 10);
 
 		val[record_tasks].swapents_ori =
-			get_mm_counter(tsk->mm, MM_SWAPENTS) << 2;
+			get_mm_counter(tsk->mm, MM_SWAPENTS) << (PAGE_SHIFT - 10);
 
 		task_unlock(tsk);
 
 		record_tasks++;
-
-		if (record_tasks >= 1024)
-			break;
 	}
 
 	rcu_read_unlock();
@@ -208,6 +217,12 @@ void mm_get_all_pmem(int *cnt, struct process_mem *val)
 		val[i].gl_dev = get_gpumem_by_pid(val[i].pid);
 
 	*cnt = record_tasks;
+	return ret;
+}
+
+void mm_get_all_pmem(int *cnt, struct process_mem *val)
+{
+	mm_get_all_pmem_bounded(cnt, val, 1024);
 }
 EXPORT_SYMBOL_GPL(mm_get_all_pmem);
 

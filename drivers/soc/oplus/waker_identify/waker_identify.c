@@ -58,7 +58,7 @@ struct related_thread {
 
 struct rt_info_list_node {
 	int handle;
-	int start_ktime;
+	u64 start_ktime;
 	int seed_index;
 	int seed_pid;
 	int stopped;
@@ -108,10 +108,14 @@ void init_rt_info_list(struct rt_info_list_node *new_node)
 
 void remove_rt_info_node(struct rt_info_list_node *node)
 {
+	int i;
+
 	if (!node)
 		return;
-	pr_info("[waker_identify] %d removed", node->seed_pid);
+	pr_debug("[waker_identify] %d removed", node->seed_pid);
 	list_del(&node->list_node);
+	for (i = 0; i < node->total_count; i++)
+		put_task_struct(node->rt_thread[i].task);
 	kfree(node);
 }
 
@@ -122,9 +126,7 @@ void remove_rt_info_node_by_wq(struct work_struct *wq_for_kfree)
 	write_lock(&rt_info_rwlock);
 	list_for_each_entry_safe(tmp, tmp_for_safe, &rt_info_list, list_node) {
 		if (ktime_to_ms(ktime_get()) - tmp->start_ktime > DEAFAULT_HOLD_KTIME_MS) {
-			list_del(&tmp->list_node);
-			pr_info("[waker_identify] %d removed", tmp->seed_pid);
-			kfree(tmp);
+			remove_rt_info_node(tmp);
 		}
 	}
 	global_doing_free = 0;
@@ -329,6 +331,7 @@ static inline void init_child_rthread(struct rt_info_list_node *node, int index,
 
 	thread->tgid = task->tgid;
 	thread->pid = task->pid;
+	get_task_struct(task);
 	thread->task = task;
 	thread->total_count = 0;
 	thread->visted = false;
@@ -357,7 +360,7 @@ static ssize_t waker_info_proc_write(struct file *file,
 	if (ret != 1)
 		return -EINVAL;
 
-	if (handel < 0 || handel > MAX_HANDLE_NUM)
+	if (handel < 0 || handel >= MAX_HANDLE_NUM)
 		return -EINVAL;
 
 	write_lock(&rt_info_rwlock);
@@ -461,7 +464,8 @@ static int rt_info_show(struct seq_file *m, void *v)
 		return -ENOMEM;
 
 	read_lock(&rt_info_rwlock);
-	len += snprintf(page + len, RESULT_PAGE_SIZE - len, "%d", handle_current-1);
+	len += snprintf(page + len, RESULT_PAGE_SIZE - len, "%d",
+		(handle_current + MAX_HANDLE_NUM - 1) % MAX_HANDLE_NUM);
 	read_unlock(&rt_info_rwlock);
 
 	if (len > 0)
@@ -489,23 +493,25 @@ static ssize_t rt_info_proc_write(struct file *file, const char __user *buf,
 	int in_uid, for_wakee;
 	struct rt_info_list_node *new_node;
 
-	ret = simple_write_to_buffer(page, sizeof(page), ppos, buf, count);
+	if (!count || count >= sizeof(page))
+		return -E2BIG;
+
+	ret = simple_write_to_buffer(page, sizeof(page) - 1, ppos, buf, count);
 	if (ret <= 0)
 		return ret;
 
-	new_node = kzalloc(sizeof(*new_node), GFP_ATOMIC);
+	new_node = kzalloc(sizeof(*new_node), GFP_KERNEL);
 	if (!new_node)
 		return -ENOMEM;
 
 	ret = sscanf(iter, "%d;%d;%d", &pid, &in_uid, &for_wakee);
-	if (ret != 3) {
+	if (ret != 3 || pid <= 0 || (in_uid != 0 && in_uid != 1) ||
+	    (for_wakee != 0 && for_wakee != 1)) {
 		kfree(new_node);
 		return -EINVAL;
 	}
 
-	rcu_read_lock();
-	task = find_task_by_vpid(pid);
-	rcu_read_unlock();
+	task = find_get_task_by_vpid(pid);
 
 	if (task) {
 		write_lock(&rt_info_rwlock);
@@ -521,10 +527,11 @@ static ssize_t rt_info_proc_write(struct file *file, const char __user *buf,
 		write_unlock(&rt_info_rwlock);
 	} else {
 		kfree(new_node);
+		return -ESRCH;
 	}
 
-	if (task)
-		pr_info("[waker_identify] %d start", pid);
+	put_task_struct(task);
+	pr_debug("[waker_identify] %d start", pid);
 
 	return count;
 }

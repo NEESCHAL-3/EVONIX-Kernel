@@ -1321,8 +1321,42 @@ F2FS_FEATURE_RO_ATTR(pin_file);
 F2FS_FEATURE_RO_ATTR(linear_lookup);
 #endif
 
+static ssize_t f2fs_compat_u64_show(struct f2fs_attr *a,
+			struct f2fs_sb_info *sbi, char *buf)
+{
+	return sysfs_emit(buf, "0\n");
+}
+
+static ssize_t f2fs_compat_u64_store(struct f2fs_attr *a,
+			struct f2fs_sb_info *sbi, const char *buf, size_t count)
+{
+	return count;
+}
+
+#define F2FS_COMPAT_RW_ATTR(_name) \
+static struct f2fs_attr f2fs_attr_##_name = { \
+	.attr = {.name = __stringify(_name), .mode = 0664 }, \
+	.show = f2fs_compat_u64_show, \
+	.store = f2fs_compat_u64_store, \
+}
+
+F2FS_COMPAT_RW_ATTR(fastdiscard_enable);
+F2FS_COMPAT_RW_ATTR(discard_avgtime_us);
+F2FS_COMPAT_RW_ATTR(discard_maxtime_us);
+F2FS_COMPAT_RW_ATTR(discard_fail_nums);
+F2FS_COMPAT_RW_ATTR(total_discard_blks);
+F2FS_COMPAT_RW_ATTR(discard_avg_blks);
+F2FS_COMPAT_RW_ATTR(screen_on_discard_blks);
+
 #define ATTR_LIST(name) (&f2fs_attr_##name.attr)
 static struct attribute *f2fs_attrs[] = {
+	ATTR_LIST(fastdiscard_enable),
+	ATTR_LIST(discard_avgtime_us),
+	ATTR_LIST(discard_maxtime_us),
+	ATTR_LIST(discard_fail_nums),
+	ATTR_LIST(total_discard_blks),
+	ATTR_LIST(discard_avg_blks),
+	ATTR_LIST(screen_on_discard_blks),
 	ATTR_LIST(gc_urgent_sleep_time),
 	ATTR_LIST(gc_min_sleep_time),
 	ATTR_LIST(gc_max_sleep_time),

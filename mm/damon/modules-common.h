@@ -27,11 +27,13 @@
 	module_param_named(quota_sz, quota.sz, ulong, 0600);
 
 #define DEFINE_DAMON_MODULES_WMARKS_PARAMS(wmarks)			\
+	module_param_named(wmarks_metric, wmarks.metric, uint,		\
+			0644);						\
 	module_param_named(wmarks_interval, wmarks.interval, ulong,	\
-			0600);						\
-	module_param_named(wmarks_high, wmarks.high, ulong, 0600);	\
-	module_param_named(wmarks_mid, wmarks.mid, ulong, 0600);	\
-	module_param_named(wmarks_low, wmarks.low, ulong, 0600);
+			0644);						\
+	module_param_named(wmarks_high, wmarks.high, ulong, 0644);	\
+	module_param_named(wmarks_mid, wmarks.mid, ulong, 0644);	\
+	module_param_named(wmarks_low, wmarks.low, ulong, 0644);
 
 #define DEFINE_DAMON_MODULES_DAMOS_STATS_PARAMS(stat, try_name,		\
 		succ_name, qt_exceed_name)				\

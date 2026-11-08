@@ -21,21 +21,19 @@ enum {
 
 int midas_ioctl_get_och(void *kdata, void *priv_info)
 {
-	unsigned long flags;
 	struct midas_priv_info *info = priv_info;
-	struct cpu_och_data *buf = NULL;
+	struct cpu_och_data *buf;
+	int count, ret;
 
-	if (IS_ERR_OR_NULL(info) ||
-		IS_ERR_OR_NULL(info->mmap_addr))
+	if (!info || !info->mmap_addr || info->type != MMAP_OCH)
 		return -EINVAL;
-
 	buf = info->mmap_addr;
-	spin_lock_irqsave(&info->lock, flags);
-	memset(buf, 0, sizeof(struct cpu_och_data));
-	get_cpufreq_health_info(&buf->cnt, buf->info);
-	spin_unlock_irqrestore(&info->lock, flags);
-
-	return 0;
+	/* The collector takes a mutex: never invoke it under info->lock. */
+	memset(buf, 0, sizeof(*buf));
+	ret = get_cpufreq_health_info_bounded(&count, buf->info, STATE_MAX);
+	if (!ret)
+		buf->cnt = count;
+	return ret;
 }
 
 static void update_cpu_entry_locked(struct task_struct *p, u64 cputime,
@@ -69,7 +67,7 @@ static void query_pid_name(struct task_struct *p, char *name)
 static void update_entry_locked(uid_t uid, struct task_struct *p, u64 cputime,
 				unsigned int state, struct cpu_mmap_data *buf, unsigned int type)
 {
-	unsigned int id_cnt = buf->cnt;
+	unsigned int id_cnt = min_t(unsigned int, READ_ONCE(buf->cnt), ENTRY_MAX);
 	unsigned int index = (type == TYPE_PROCESS) ? ID_PID : ID_UID;
 	unsigned int id = (type == TYPE_PROCESS) ? task_pid_nr(p) : uid;
 	struct task_struct *task;
@@ -99,9 +97,9 @@ static void update_entry_locked(uid_t uid, struct task_struct *p, u64 cputime,
 		query_pid_name(p, buf->entrys[i].name[ID_PID]);
 		/* Get tgid name */
 		rcu_read_lock();
-		task = find_task_by_vpid(buf->entrys[i].id[ID_TGID]);
+		task = p->group_leader;
+		memcpy(buf->entrys[i].name[ID_TGID], task->comm, TASK_COMM_LEN);
 		rcu_read_unlock();
-		strncpy(buf->entrys[i].name[ID_TGID], task->comm, TASK_COMM_LEN);
 	}
 	/* the unit of time_in_state is ms */
 	buf->entrys[i].time_in_state[state] += DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC);
@@ -130,6 +128,11 @@ void midas_record_task_times(void *data, u64 cputime, struct task_struct *p,
 			spin_unlock_irqrestore(&info->lock, flags);
 			continue;
 		}
+		if (state >= STATE_MAX) {
+			info->state_overflow = true;
+			spin_unlock_irqrestore(&info->lock, flags);
+			continue;
+		}
 		avail = info->avail;
 		pool = info->mmap_addr;
 
@@ -150,11 +153,15 @@ int midas_ioctl_get_time_in_state(void *kdata, void *priv_info)
 	struct cpu_mmap_pool *pool;
 
 	if (IS_ERR_OR_NULL(info) ||
-		IS_ERR_OR_NULL(info->mmap_addr))
+		IS_ERR_OR_NULL(info->mmap_addr) || info->type != MMAP_CPU)
 		return -EINVAL;
 
 	spin_lock_irqsave(&info->lock, flags);
 
+	if (info->state_overflow) {
+		spin_unlock_irqrestore(&info->lock, flags);
+		return -EOVERFLOW;
+	}
 	*tmp = info->avail;
 	info->avail = !info->avail;
 	pool = info->mmap_addr;
