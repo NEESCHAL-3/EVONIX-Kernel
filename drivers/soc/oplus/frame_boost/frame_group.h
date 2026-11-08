@@ -155,6 +155,7 @@ bool frame_boost_enabled(void);
 bool is_fbg_task(struct task_struct *p);
 int task_get_frame_group_id(int pid);
 int frame_group_init(void);
+void frame_group_activate(void);
 u64 fbg_ktime_get_ns(void);
 void fbg_add_update_freq_hook(void (*func)(struct rq *rq, unsigned int flags));
 void register_frame_group_vendor_hooks(void);

@@ -32,6 +32,8 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/vermagic.h>
+#include <linux/evonix_hybridswap.h>
+#include <linux/evonix_rodin_adapter.h>
 #include <linux/notifier.h>
 #include <linux/sched.h>
 #include <linux/device.h>
@@ -2851,6 +2853,21 @@ static int unknown_module_param_cb(char *param, char *val, const char *modname,
 static int early_mod_check(struct load_info *info, int flags)
 {
 	int err;
+
+	if (!strcmp(info->name, "adapter_class") && evonix_rodin_adapter_class_ready()) {
+		pr_info("adapter_class: native provider is already built in\n");
+		return -EEXIST;
+	}
+
+#ifdef CONFIG_EVONIX_OPLUS_HYBRIDSWAP_BUILTIN
+	/* Preserve normal duplicate-load semantics for initialized native providers. */
+	if ((!strcmp(info->name, "zram") && evonix_hybridswap_zram_ready()) ||
+	    (!strcmp(info->name, "zsmalloc") && evonix_hybridswap_allocator_ready()) ||
+	    (!strcmp(info->name, "mtk_disp_notify") && evonix_hybridswap_notifier_ready())) {
+		pr_info("%s: native provider is already built in\n", info->name);
+		return -EEXIST;
+	}
+#endif
 
 	/*
 	 * Now that we know we have the correct module name, check

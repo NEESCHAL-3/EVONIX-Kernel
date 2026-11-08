@@ -63,5 +63,6 @@ int register_device_proc_for_ufsplus(char *name, int *hpb_status, int *tw_status
 int register_device_proc_for_emmc(char *emmc, char *emmc_fw, void *mmc);
 int register_devinfo(char *name, struct manufacture_info *info);
 bool check_id_match(const char *label, const char *id_match, int id);
+struct proc_dir_entry *get_devinfo_proc_dir(void);
 
 #endif  /*_DEVICE_INFO_H*/

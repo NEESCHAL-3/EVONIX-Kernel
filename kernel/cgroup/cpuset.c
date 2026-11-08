@@ -4033,6 +4033,26 @@ void cpuset_cpus_allowed(struct task_struct *tsk, struct cpumask *pmask)
 	spin_unlock_irqrestore(&callback_lock, flags);
 }
 EXPORT_SYMBOL_GPL(cpuset_cpus_allowed);
+
+/* The caller must retain css for the duration of this snapshot. */
+bool cpuset_css_cpus_allowed(struct cgroup_subsys_state *css,
+                            struct cpumask *mask)
+{
+	struct cpuset *cs;
+	unsigned long flags;
+	bool online;
+
+	if (!css || css->ss != &cpuset_cgrp_subsys)
+		return false;
+	cs = css_cs(css);
+	spin_lock_irqsave(&callback_lock, flags);
+	online = is_cpuset_online(cs);
+	if (online)
+		cpumask_copy(mask, cs->effective_cpus);
+	spin_unlock_irqrestore(&callback_lock, flags);
+	return online;
+}
+
 /**
  * cpuset_cpus_allowed_fallback - final fallback before complete catastrophe.
  * @tsk: pointer to task_struct with which the scheduler is struggling

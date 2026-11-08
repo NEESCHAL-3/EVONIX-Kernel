@@ -24,14 +24,21 @@ static void update_procmem_entry_locked(int index, struct process_mem val, struc
 	strncpy(buf->entrys[index].comm, val.comm, TASK_COMM_LEN);
 }
 
+static DEFINE_MUTEX(procmem_lock);
 static struct process_mem pmem[ENTRY_MAX] = {0};
-void midas_update_procmem(struct midas_priv_info *info)
+static int midas_update_procmem(struct midas_priv_info *info)
 {
 	unsigned long flags;
-	int i, cnt;
+	int i, cnt, ret;
 	struct mem_mmap_data *buf = info->mmap_addr;
 
-	mm_get_all_pmem(&cnt, pmem);
+	mutex_lock(&procmem_lock);
+	ret = mm_get_all_pmem_bounded(&cnt, pmem, ARRAY_SIZE(pmem));
+	if (ret) {
+		mutex_unlock(&procmem_lock);
+		return ret;
+	}
+	cnt = clamp(cnt, 0, ENTRY_MAX);
 
 	spin_lock_irqsave(&info->lock, flags);
 
@@ -41,6 +48,8 @@ void midas_update_procmem(struct midas_priv_info *info)
 	buf->cnt = cnt;
 
 	spin_unlock_irqrestore(&info->lock, flags);
+	mutex_unlock(&procmem_lock);
+	return 0;
 }
 
 static void update_meminfo_locked(int index, unsigned long value, struct mem_mmap_data* buf)
@@ -83,7 +92,7 @@ int midas_ioctl_get_meminfo(void *kdata, void *priv_info)
 	struct midas_priv_info *info = priv_info;
 
 	if (IS_ERR_OR_NULL(info) ||
-		IS_ERR_OR_NULL(info->mmap_addr))
+		IS_ERR_OR_NULL(info->mmap_addr) || info->type != MMAP_MEM)
 		return -EINVAL;
 
 	spin_lock_irqsave(&info->lock, flags);
@@ -91,9 +100,7 @@ int midas_ioctl_get_meminfo(void *kdata, void *priv_info)
 	spin_unlock_irqrestore(&info->lock, flags);
 
 	midas_update_meminfo(info);
-	midas_update_procmem(info);
-
-	return 0;
+	return midas_update_procmem(info);
 }
 
 int midas_ioctl_get_totalmem(void *kdata, void *priv_info)

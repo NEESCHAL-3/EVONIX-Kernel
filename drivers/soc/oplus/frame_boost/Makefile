@@ -10,3 +10,5 @@ oplus_bsp_frame_boost-y := \
         frame_timer.o
 
 obj-$(CONFIG_OPLUS_FEATURE_FRAME_BOOST) += oplus_bsp_frame_boost.o
+
+oplus_bsp_frame_boost-$(CONFIG_EVONIX_OPLUS_FRAME_IOCTL) += frame_ioctl.o

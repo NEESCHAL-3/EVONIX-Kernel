@@ -39,15 +39,16 @@ config BLOCKIO_UX_OPT
         help
           Prioritize block I/O operations issued by UX tasks.
 
-
-
-config OPLUS_FEATURE_LOADBALANCE
-        bool "OPlus SchedAssist load balance"
+config OPLUS_CPU_AUDIO_PERF
+        bool "OPlus SchedAssist CPU audio performance"
         depends on OPLUS_FEATURE_SCHED_ASSIST
-        default n
+        default y
         help
-          Enable the native OPlus load-balance extension used by
-          SchedAssist, including /proc/oplus_scheduler/sched_assist/lb_enable.
+          Enable audio performance optimization for SchedAssist,
+          including /proc/oplus_scheduler/sched_assist/audio/ interfaces.
+
+
+
 
 config EVONIX_OPLUS_SA_COMMON_HOOKS
         bool "EVONIX common scheduler hook bridge"
@@ -108,4 +109,4 @@ source "drivers/soc/oplus/healthinfo_lite/Kconfig"
 
 source "drivers/soc/oplus/waker_identify/Kconfig"
 
-source "drivers/soc/oplus/game_opt/Kconfig"
+source "drivers/soc/oplus/sched_info/Kconfig"

@@ -953,3 +953,5 @@ config CHARGER_QCOM_SMB2
 	  in PMI8998 and related PMICs.
 
 endif # POWER_SUPPLY
+
+source "drivers/power/supply/evonix_rodin_adapter/Kconfig"

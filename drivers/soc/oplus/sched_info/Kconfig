@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config OPLUS_FEATURE_CPU_JANKINFO
+	bool "Oplus native scheduler information"
+	depends on ARM64 && SMP && CPUSETS && CPU_FREQ && OPLUS_FEATURE_SCHED_ASSIST
+	depends on !EVONIX_OPLUS_HEALTHINFO_LITE
+	default n
+	help
+	  Collect real task, CPU-load and frequency history for the Oplus
+	  scheduler-information interfaces. Requires Rodin topology and
+	  lifecycle validation before production enablement.
+
+config JANK_DEBUG
+	bool "Oplus scheduler information debug tracing"
+	depends on OPLUS_FEATURE_CPU_JANKINFO
+	default n

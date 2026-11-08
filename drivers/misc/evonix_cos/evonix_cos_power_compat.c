@@ -6,7 +6,7 @@
  * power_supply or thermal backend. If the backend is unavailable, return error.
  */
 
-#include <linux/atomic.h>
+#include <linux/spinlock.h>
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -50,8 +50,11 @@ static struct proc_dir_entry *proc_passedchg;
 static struct proc_dir_entry *proc_passedchg_reset_count;
 static struct proc_dir_entry *proc_shell_temp;
 
-static atomic64_t shell_temp_write_count;
-static char shell_temp_last_payload[64];
+/* Horae publishes front/frame/back estimates in milli-Celsius. */
+#define EVX_SHELL_COUNT 3
+static DEFINE_SPINLOCK(shell_temp_lock);
+static int shell_temp_mc[EVX_SHELL_COUNT];
+static unsigned int shell_temp_valid;
 
 static int evx_psy_get_int(const char *psy_name,
 			   enum power_supply_property psp,
@@ -172,98 +175,135 @@ static int evx_get_usb_current_now(void)
 	 * /sys/class/power_supply/usb/current_now
 	 * /sys/class/power_supply/usb/input_current_now
 	 *
-	 * Use generic power_supply current property. If unavailable, use
-	 * CURRENT_MAX. Negative current is normalized.
+	 * Use the measured current property. A configured current limit is
+	 * not an instantaneous current measurement.
 	 */
 	if (!evx_psy_get_int("usb", POWER_SUPPLY_PROP_CURRENT_NOW, &val)) {
-		if (val < 0)
-			val = -val;
-		return val;
+		if (val == INT_MIN)
+			return -ERANGE;
+		return abs(val);
 	}
 
-	if (!evx_psy_get_int("usb", POWER_SUPPLY_PROP_CURRENT_MAX, &val)) {
-		if (val < 0)
-			val = -val;
-		return val;
-	}
 
 	return -ENODEV;
+}
+
+/* Distinct wire contracts: Xiaomi adapter_class.h and Oplus oplus_chg.h. */
+enum evx_mtk_pd_state {
+	EVX_MTK_PD_NONE = 0,
+	EVX_MTK_PD_HARD_RESET,
+	EVX_MTK_PD_SOFT_RESET,
+	EVX_MTK_PD_READY,
+	EVX_MTK_PD30_READY,
+	EVX_MTK_PPS_READY,
+	EVX_MTK_TYPEC_ONLY,
+	EVX_MTK_NEW_SOURCE_CAP,
+};
+
+enum evx_oplus_charge_protocol {
+	EVX_OPLUS_PROTOCOL_DEFAULT = 0,
+	EVX_OPLUS_PROTOCOL_PD = 3,
+	EVX_OPLUS_PROTOCOL_PPS = 5,
+};
+
+static int evx_get_native_fast_charge_active(void)
+{
+	int online, val, mode_ret, quick_ret, ret;
+
+	ret = evx_psy_get_int("usb", POWER_SUPPLY_PROP_ONLINE, &online);
+	if (ret)
+		return ret;
+	if (!online)
+		return 0;
+	mode_ret = evx_read_int_file(EVX_XM_FASTCHARGE_MODE_PATH, &val);
+	if (!mode_ret && val > 0)
+		return 1;
+	quick_ret = evx_read_int_file(EVX_XM_QUICK_CHARGE_TYPE_PATH, &val);
+	if (!quick_ret)
+		return val > 0;
+	return mode_ret ? mode_ret : 0;
+}
+
+static int evx_map_pd_protocol(int pd_state, int native_fast)
+{
+	switch (pd_state) {
+	case EVX_MTK_PD_READY:
+	case EVX_MTK_PD30_READY:
+		return EVX_OPLUS_PROTOCOL_PD;
+	case EVX_MTK_PPS_READY:
+		return EVX_OPLUS_PROTOCOL_PPS;
+	case EVX_MTK_PD_HARD_RESET:
+	case EVX_MTK_PD_SOFT_RESET:
+	case EVX_MTK_NEW_SOURCE_CAP:
+		return -EAGAIN;
+	case EVX_MTK_PD_NONE:
+	case EVX_MTK_TYPEC_ONLY:
+		/* No verified VOOC/QC/UFCS identity follows from a power tier. */
+		if (native_fast < 0)
+			return native_fast;
+		return native_fast ? -EOPNOTSUPP : EVX_OPLUS_PROTOCOL_DEFAULT;
+	default:
+		return -EOPNOTSUPP;
+	}
 }
 
 static int evx_get_fast_chg_type(void)
 {
-	int online;
-	int val;
+	int online, state, ret;
 
-	if (evx_psy_get_int("usb", POWER_SUPPLY_PROP_ONLINE, &online) ||
-	    !online)
-		return 0;
+	ret = evx_psy_get_int("usb", POWER_SUPPLY_PROP_ONLINE, &online);
+	if (ret)
+		return ret;
+	if (!online)
+		return EVX_OPLUS_PROTOCOL_DEFAULT;
+	ret = evx_read_int_file(EVX_XM_PD_TYPE_PATH, &state);
+	if (ret)
+		return ret;
+	return evx_map_pd_protocol(state, evx_get_native_fast_charge_active());
+}
 
-	/*
-	 * Xiaomi's charger framework already classifies the negotiated charging
-	 * protocol. Forward that real classification instead of guessing from
-	 * an instantaneous current reading, which becomes zero on the PPS path.
-	 */
-	if (!evx_read_int_file(EVX_XM_QUICK_CHARGE_TYPE_PATH, &val) &&
-	    val > 0)
-		return val;
+static int evx_get_shell_temp_mc(int *out)
+{
+	unsigned long flags;
+	unsigned int valid;
+	int index, value = INT_MIN;
 
-	/*
-	 * Fallback for authenticated Xiaomi fast charging when the protocol
-	 * classifier is temporarily unavailable.
-	 */
-	if (!evx_read_int_file(EVX_XM_FASTCHARGE_MODE_PATH, &val) &&
-	    val > 0)
-		return 1;
-
+	spin_lock_irqsave(&shell_temp_lock, flags);
+	valid = shell_temp_valid;
+	for (index = 0; index < EVX_SHELL_COUNT; index++) {
+		if (valid & BIT(index))
+			value = max(value, shell_temp_mc[index]);
+	}
+	spin_unlock_irqrestore(&shell_temp_lock, flags);
+	if (!valid)
+		return -ENODATA;
+	*out = value;
 	return 0;
 }
 
-static int evx_get_shell_temp_mc(void)
+static int evx_parse_shell_temp(char *text, unsigned int *index, int *temp)
 {
-	static const char * const zones[] = {
-		"battery",
-		"bms",
-		"mt6375-gauge",
-		"quiet_therm",
-		"wifi_therm",
-		"flash_therm",
-		"charger1_therm",
-		"ScreenPmic_therm",
-		"mtktsAP",
-		"soc_max",
-		"consys",
-	};
-	int i;
-	int temp;
-	int bat_temp;
-	struct thermal_zone_device *tz;
+	char *token, *fields[2];
+	int count = 0, ret;
 
-	/*
-	 * Real primary backend:
-	 * /sys/class/power_supply/battery/temp exists on rodin.
-	 * power_supply temp is normally deci-Celsius:
-	 * 381 => 38.1C => 38100 milli-Celsius.
-	 */
-	if (!evx_psy_get_int("battery", POWER_SUPPLY_PROP_TEMP, &bat_temp))
-		return bat_temp * 100;
-
-	if (!evx_psy_get_int("bms", POWER_SUPPLY_PROP_TEMP, &bat_temp))
-		return bat_temp * 100;
-
-	/*
-	 * Real fallback: use actual thermal zone names observed on rodin.
-	 */
-	for (i = 0; i < ARRAY_SIZE(zones); i++) {
-		tz = thermal_zone_get_zone_by_name(zones[i]);
-		if (IS_ERR(tz))
+	while ((token = strsep(&text, " \t\r\n"))) {
+		if (!*token)
 			continue;
-
-		if (!thermal_zone_get_temp(tz, &temp))
-			return temp;
+		if (count == ARRAY_SIZE(fields))
+			return -EINVAL;
+		fields[count++] = token;
 	}
-
-	return -ENODEV;
+	if (count != ARRAY_SIZE(fields))
+		return -EINVAL;
+	ret = kstrtouint(fields[0], 10, index);
+	if (ret)
+		return ret;
+	ret = kstrtoint(fields[1], 10, temp);
+	if (ret)
+		return ret;
+	if (*index >= EVX_SHELL_COUNT || *temp < -273150 || *temp > 200000)
+		return -ERANGE;
+	return 0;
 }
 
 static enum power_supply_property evx_online_props[] = {
@@ -400,12 +440,7 @@ static int evx_get_design_capacity_mah(void)
 		return val / 1000;
 	if (!evx_psy_get_int("battery", POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, &val))
 		return val / 1000;
-	if (!evx_psy_get_int("bms", POWER_SUPPLY_PROP_CHARGE_FULL, &val))
-		return val / 1000;
-	if (!evx_psy_get_int("battery", POWER_SUPPLY_PROP_CHARGE_FULL, &val))
-		return val / 1000;
-
-	return 5000;
+	return -ENODATA;
 }
 
 static int evx_get_full_capacity_mah(void)
@@ -417,32 +452,47 @@ static int evx_get_full_capacity_mah(void)
 	if (!evx_psy_get_int("battery", POWER_SUPPLY_PROP_CHARGE_FULL, &val))
 		return val / 1000;
 
-	return evx_get_design_capacity_mah();
+	return -ENODATA;
 }
 
-static int evx_get_charge_counter_mah(void)
+static int evx_get_cycle_count(void)
 {
-	int val;
+	int cycles;
+	int ret;
 
-	if (!evx_psy_get_int("bms", POWER_SUPPLY_PROP_CHARGE_COUNTER, &val))
-		return val / 1000;
-	if (!evx_psy_get_int("battery", POWER_SUPPLY_PROP_CHARGE_COUNTER, &val))
-		return val / 1000;
-
-	return evx_get_battery_rm_mah();
+	ret = evx_psy_get_int("battery", POWER_SUPPLY_PROP_CYCLE_COUNT, &cycles);
+	if (ret)
+		ret = evx_psy_get_int("bms", POWER_SUPPLY_PROP_CYCLE_COUNT, &cycles);
+	if (ret)
+		return ret;
+	return cycles >= 0 ? cycles : -ERANGE;
 }
 
 static ssize_t battery_soh_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "100\n");
+	int soh;
+	int ret;
+
+	ret = evx_read_int_file("/sys/class/power_supply/bms/soh_new", &soh);
+	if (ret == -ENOENT || ret == -ENODEV || ret == -EOPNOTSUPP)
+		ret = evx_read_int_file("/sys/class/power_supply/bms/soh", &soh);
+	if (ret)
+		return ret;
+	if (soh < 0 || soh > 100)
+		return -ERANGE;
+	return sysfs_emit(buf, "%d\n", soh);
 }
 static DEVICE_ATTR_RO(battery_soh);
 
 static ssize_t battery_cc_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d\n", evx_get_charge_counter_mah());
+	int cycles = evx_get_cycle_count();
+
+	if (cycles < 0)
+		return cycles;
+	return sysfs_emit(buf, "%d\n", cycles);
 }
 static DEVICE_ATTR_RO(battery_cc);
 
@@ -452,30 +502,41 @@ static ssize_t battery_dod_show(struct device *dev,
 	int cap = evx_get_battery_capacity();
 
 	if (cap < 0)
-		cap = 100;
+		return cap;
+	if (cap > 100)
+		return -ERANGE;
 
 	return sysfs_emit(buf, "%d\n", 100 - cap);
 }
 static DEVICE_ATTR_RO(battery_dod);
 
 static ssize_t design_capacity_show(struct device *dev,
-				    struct device_attribute *attr, char *buf)
+				struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d\n", evx_get_design_capacity_mah());
+	int mah = evx_get_design_capacity_mah();
+
+	if (mah < 0)
+		return mah;
+	return sysfs_emit(buf, "%d\n", mah);
 }
 static DEVICE_ATTR_RO(design_capacity);
 
 static ssize_t battery_fcc_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d\n", evx_get_full_capacity_mah());
+	int mah = evx_get_full_capacity_mah();
+
+	if (mah < 0)
+		return mah;
+	return sysfs_emit(buf, "%d\n", mah);
 }
 static DEVICE_ATTR_RO(battery_fcc);
 
 static ssize_t battery_qmax_show(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d\n", evx_get_design_capacity_mah());
+	/* The Xiaomi gauge exports FCC and design capacity, not measured Qmax. */
+	return -EOPNOTSUPP;
 }
 static DEVICE_ATTR_RO(battery_qmax);
 
@@ -489,7 +550,7 @@ static ssize_t battery_temp_show(struct device *dev,
 	if (!evx_psy_get_int("bms", POWER_SUPPLY_PROP_TEMP, &temp))
 		return sysfs_emit(buf, "%d\n", temp);
 
-	return sysfs_emit(buf, "250\n");
+	return -ENODATA;
 }
 static DEVICE_ATTR_RO(battery_temp);
 
@@ -585,7 +646,11 @@ static DEVICE_ATTR_RO(charge_technology);
 static ssize_t fast_chg_type_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
-	return sysfs_emit(buf, "%d\n", evx_get_fast_chg_type());
+	int type = evx_get_fast_chg_type();
+
+	if (type < 0)
+		return type;
+	return sysfs_emit(buf, "%d\n", type);
 }
 static DEVICE_ATTR_RO(fast_chg_type);
 
@@ -617,7 +682,10 @@ static ssize_t adapter_power_show(struct device *dev,
 	 * Xiaomi adapting_power can retain the previous adapter value after
 	 * switching to SDP/CDP. Never expose that stale value to ColorOS.
 	 */
-	if (evx_get_fast_chg_type() <= 0)
+	val = evx_get_native_fast_charge_active();
+	if (val < 0)
+		return val;
+	if (!val)
 		return sysfs_emit(buf, "0\n");
 
 	if (!evx_read_int_file(EVX_XM_POWER_MAX_PATH, &val) &&
@@ -636,19 +704,11 @@ static DEVICE_ATTR_RO(adapter_power);
 static ssize_t protocol_type_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
-	int val;
+	int type = evx_get_fast_chg_type();
 
-	/*
-	 * Do not forward Xiaomi SDP/CDP/raw PD states as an OPlus fast-charge
-	 * protocol. Only expose protocol_type while fast charging is active.
-	 */
-	if (evx_get_fast_chg_type() <= 0)
-		return sysfs_emit(buf, "0\n");
-
-	if (evx_read_int_file(EVX_XM_PD_TYPE_PATH, &val) || val < 0)
-		return sysfs_emit(buf, "0\n");
-
-	return sysfs_emit(buf, "%d\n", val);
+	if (type < 0)
+		return type;
+	return sysfs_emit(buf, "%d\n", type);
 }
 static DEVICE_ATTR_RO(protocol_type);
 
@@ -656,8 +716,7 @@ static DEVICE_ATTR_RO(protocol_type);
 /* /proc/charger/input_current_now */
 static int passedchg_proc_show(struct seq_file *m, void *v)
 {
-	seq_puts(m, "0\n");
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int passedchg_proc_open(struct inode *inode, struct file *file)
@@ -674,8 +733,7 @@ static const struct proc_ops passedchg_proc_ops = {
 
 static int passedchg_reset_count_proc_show(struct seq_file *m, void *v)
 {
-	seq_puts(m, "0\n");
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int passedchg_reset_count_proc_open(struct inode *inode, struct file *file)
@@ -716,10 +774,11 @@ static const struct proc_ops input_current_now_proc_ops = {
 /* /proc/shell-temp */
 static int shell_temp_proc_show(struct seq_file *m, void *v)
 {
-	int temp = evx_get_shell_temp_mc();
+	int temp, ret;
 
-	if (temp < 0)
-		return temp;
+	ret = evx_get_shell_temp_mc(&temp);
+	if (ret)
+		return ret;
 
 	seq_printf(m, "%d\n", temp);
 	return 0;
@@ -729,20 +788,28 @@ static ssize_t shell_temp_proc_write(struct file *file,
 				    const char __user *buf,
 				    size_t count, loff_t *ppos)
 {
-	size_t len;
+	char text[64];
+	unsigned int index;
+	unsigned long flags;
+	int temp, ret;
 
-	len = min(count, sizeof(shell_temp_last_payload) - 1);
-	if (copy_from_user(shell_temp_last_payload, buf, len))
+	if (!count)
+		return 0;
+	if (count >= sizeof(text))
+		return -E2BIG;
+	if (copy_from_user(text, buf, count))
 		return -EFAULT;
-
-	shell_temp_last_payload[len] = '\0';
-	atomic64_inc(&shell_temp_write_count);
-
-	/*
-	 * Horae writes here as a control/refresh action.
-	 * Read path still returns real thermal value; write path records the
-	 * real userspace request and accepts it instead of returning EIO.
-	 */
+	/* Reject embedded NUL bytes instead of silently accepting a prefix. */
+	if (memchr(text, '\0', count))
+		return -EINVAL;
+	text[count] = '\0';
+	ret = evx_parse_shell_temp(text, &index, &temp);
+	if (ret)
+		return ret;
+	spin_lock_irqsave(&shell_temp_lock, flags);
+	shell_temp_mc[index] = temp;
+	shell_temp_valid |= BIT(index);
+	spin_unlock_irqrestore(&shell_temp_lock, flags);
 	return count;
 }
 

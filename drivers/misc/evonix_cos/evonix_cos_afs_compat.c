@@ -1,188 +1,213 @@
-// SPDX-License-Identifier: GPL-2.0
-/*
- * EVONIX ColorOS/OPlus AFS config compatibility.
- * Provides /proc/oplus_afs_config/afs_config so OPlus framework can open it.
- * Safe compat: read-only stable defaults, write accepts data without changing
- * real kernel scheduling/thermal policy.
- */
-
+// SPDX-License-Identifier: GPL-2.0-only
 #include <linux/init.h>
+#include <linux/cred.h>
+#include <linux/ioctl.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#define EVX_AFS_MAX_BUF 512
+#define EVX_AFS_MAX_SCENE 64
 
-static struct proc_dir_entry *evx_afs_dir;
-static char evx_afs_buf[EVX_AFS_MAX_BUF];
-static size_t evx_afs_len;
-static unsigned long evx_afs_writes;
-static unsigned long evx_afs_ioctls;
-static unsigned int evx_afs_last_cmd;
-static unsigned long evx_afs_last_arg;
-static int evx_afs_enable = 1;
-static DEFINE_MUTEX(evx_afs_lock);
-
-/*
- * Minimal binary android.os.afsConfig.AfsConfig protobuf:
- *   sceneTypeMax = 2
- *   sceneConfig { sceneType = SCENE_SYSTEM_UI(0) }
- *   sceneConfig { sceneType = SCENE_LAUNCHER(1) }
- *
- * Wire guess is from afsConfig.so embedded proto descriptors:
- * AfsConfig: sceneTypeMax, sceneConfig
- * SceneConfig: sceneType
- */
-static const unsigned char evx_afs_default_proto[] = {
-        0x08, 0x02,
-        0x12, 0x02, 0x08, 0x00,
-        0x12, 0x02, 0x08, 0x01,
+/* Wire layouts verified against ColorOS 17 afsConfig.so. */
+struct evx_afs_upload {
+	__u32 version;
+	__u32 max_scene;
+	__u64 entries;
 };
+
+struct evx_afs_scene {
+	__u32 scene;
+	__u8 flags[4];
+};
+
+struct evx_afs_query {
+	__u32 scene;
+	struct evx_afs_scene config;
+} __packed;
+
+#define EVX_AFS_UPLOAD _IOW('q', 1, struct evx_afs_upload)
+#define EVX_AFS_QUERY _IOR('q', 2, struct evx_afs_query)
+
+static DEFINE_MUTEX(evx_afs_lock);
+static struct evx_afs_scene *evx_afs_scenes;
+static unsigned int evx_afs_max_scene;
+static unsigned int evx_afs_version;
+static bool evx_afs_enabled = true;
+static struct proc_dir_entry *evx_afs_dir;
+
+static int evx_afs_validate_table(const struct evx_afs_scene *scenes,
+				unsigned int max_scene)
+{
+	unsigned int index;
+
+	if (max_scene > EVX_AFS_MAX_SCENE)
+		return -E2BIG;
+	for (index = 0; index <= max_scene; index++) {
+		/* Missing rows are zero-filled by the real userspace uploader. */
+		if (!scenes[index].scene && !scenes[index].flags[0] &&
+		    !scenes[index].flags[1] && !scenes[index].flags[2] &&
+		    !scenes[index].flags[3])
+			continue;
+		if (scenes[index].scene != index)
+			return -EINVAL;
+	}
+	return 0;
+}
+
+static long evx_afs_config_ioctl(struct file *file,
+			       unsigned int cmd, unsigned long arg)
+{
+	void __user *user = (void __user *)arg;
+	struct evx_afs_upload upload;
+	struct evx_afs_query query;
+	struct evx_afs_scene *scenes, *old;
+	int ret;
+
+	switch (cmd) {
+	case EVX_AFS_UPLOAD:
+		if (!(file->f_mode & FMODE_WRITE))
+			return -EBADF;
+		/* Only the system configuration publisher may replace the table. */
+		if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) &&
+		    !uid_eq(current_euid(), KUIDT_INIT(1000)))
+			return -EPERM;
+		if (copy_from_user(&upload, user, sizeof(upload)))
+			return -EFAULT;
+		if (upload.max_scene > EVX_AFS_MAX_SCENE)
+			return -E2BIG;
+		scenes = memdup_user(u64_to_user_ptr(upload.entries),
+				    array_size(upload.max_scene + 1, sizeof(*scenes)));
+		if (IS_ERR(scenes))
+			return PTR_ERR(scenes);
+		ret = evx_afs_validate_table(scenes, upload.max_scene);
+		if (ret) {
+			kfree(scenes);
+			return ret;
+		}
+		mutex_lock(&evx_afs_lock);
+		old = evx_afs_scenes;
+		evx_afs_scenes = scenes;
+		evx_afs_max_scene = upload.max_scene;
+		evx_afs_version = upload.version;
+		mutex_unlock(&evx_afs_lock);
+		kfree(old);
+		return 0;
+	case EVX_AFS_QUERY:
+		if (copy_from_user(&query, user, sizeof(query)))
+			return -EFAULT;
+		mutex_lock(&evx_afs_lock);
+		if (!evx_afs_enabled)
+			ret = -EAGAIN;
+		else if (!evx_afs_scenes)
+			ret = -ENODATA;
+		else if (query.scene > evx_afs_max_scene ||
+			 evx_afs_scenes[query.scene].scene != query.scene)
+			ret = -ENOENT;
+		else {
+			query.config = evx_afs_scenes[query.scene];
+			ret = 0;
+		}
+		mutex_unlock(&evx_afs_lock);
+		if (ret)
+			return ret;
+		return copy_to_user(user, &query, sizeof(query)) ? -EFAULT : 0;
+	default:
+		return -ENOTTY;
+	}
+}
 
 static int evx_afs_config_show(struct seq_file *m, void *v)
 {
-        mutex_lock(&evx_afs_lock);
-        if (evx_afs_len)
-                seq_write(m, evx_afs_buf, evx_afs_len);
-        else
-                seq_write(m, evx_afs_default_proto,
-                          sizeof(evx_afs_default_proto));
-        mutex_unlock(&evx_afs_lock);
-        return 0;
+	mutex_lock(&evx_afs_lock);
+	seq_printf(m, "enabled=%u configured=%u version=%u max_scene=%u\n",
+		   evx_afs_enabled, !!evx_afs_scenes,
+		   evx_afs_version, evx_afs_max_scene);
+	mutex_unlock(&evx_afs_lock);
+	return 0;
 }
 
 static int evx_afs_config_open(struct inode *inode, struct file *file)
 {
-        return single_open(file, evx_afs_config_show, NULL);
-}
-
-static ssize_t evx_afs_config_write(struct file *file,
-                                    const char __user *buf,
-                                    size_t count, loff_t *ppos)
-{
-        size_t n = min_t(size_t, count, EVX_AFS_MAX_BUF - 1);
-
-        mutex_lock(&evx_afs_lock);
-        memset(evx_afs_buf, 0, sizeof(evx_afs_buf));
-        if (n && copy_from_user(evx_afs_buf, buf, n)) {
-                mutex_unlock(&evx_afs_lock);
-                return -EFAULT;
-        }
-        evx_afs_len = n;
-        evx_afs_writes++;
-        mutex_unlock(&evx_afs_lock);
-
-        return count;
-}
-
-
-static long evx_afs_config_ioctl(struct file *file,
-                                 unsigned int cmd, unsigned long arg)
-{
-        /*
-         * OPlus afsConfig.so uses ioctl on /proc/oplus_afs_config/afs_config
-         * for scene lookup, observed command 0x7102.
-         * Accept the request so the native side does not fail with ENOTTY.
-         */
-        mutex_lock(&evx_afs_lock);
-        evx_afs_ioctls++;
-        evx_afs_last_cmd = cmd;
-        evx_afs_last_arg = arg;
-        mutex_unlock(&evx_afs_lock);
-
-        return 0;
+	return single_open(file, evx_afs_config_show, NULL);
 }
 
 static const struct proc_ops evx_afs_config_fops = {
-        .proc_open      = evx_afs_config_open,
-        .proc_read      = seq_read,
-        .proc_write     = evx_afs_config_write,
-        .proc_ioctl     = evx_afs_config_ioctl,
+	.proc_open = evx_afs_config_open,
+	.proc_read = seq_read,
+	.proc_ioctl = evx_afs_config_ioctl,
 #ifdef CONFIG_COMPAT
-        .proc_compat_ioctl = evx_afs_config_ioctl,
+	.proc_compat_ioctl = evx_afs_config_ioctl,
 #endif
-        .proc_lseek     = seq_lseek,
-        .proc_release   = single_release,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
 };
-
 
 static int evx_afs_enable_show(struct seq_file *m, void *v)
 {
-        seq_printf(m, "%d\n", evx_afs_enable);
-        return 0;
+	seq_printf(m, "%u\n", READ_ONCE(evx_afs_enabled));
+	return 0;
 }
 
 static int evx_afs_enable_open(struct inode *inode, struct file *file)
 {
-        return single_open(file, evx_afs_enable_show, NULL);
+	return single_open(file, evx_afs_enable_show, NULL);
 }
 
-static ssize_t evx_afs_enable_write(struct file *file,
-                                    const char __user *buf,
-                                    size_t count, loff_t *ppos)
+static ssize_t evx_afs_enable_write(struct file *file, const char __user *buf,
+				   size_t count, loff_t *ppos)
 {
-        char tmp[16] = {0};
-        long val;
+	unsigned int enabled;
+	int ret;
 
-        if (count) {
-                size_t n = min_t(size_t, count, sizeof(tmp) - 1);
+	if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) &&
+	    !uid_eq(current_euid(), KUIDT_INIT(1000)))
+		return -EPERM;
+	ret = kstrtouint_from_user(buf, count, 10, &enabled);
 
-                if (copy_from_user(tmp, buf, n))
-                        return -EFAULT;
-
-                if (!kstrtol(tmp, 0, &val))
-                        evx_afs_enable = !!val;
-        }
-
-        return count;
+	if (ret)
+		return ret;
+	if (enabled > 1)
+		return -EINVAL;
+	mutex_lock(&evx_afs_lock);
+	evx_afs_enabled = enabled;
+	mutex_unlock(&evx_afs_lock);
+	return count;
 }
 
 static const struct proc_ops evx_afs_enable_fops = {
-        .proc_open      = evx_afs_enable_open,
-        .proc_read      = seq_read,
-        .proc_write     = evx_afs_enable_write,
-        .proc_lseek     = seq_lseek,
-        .proc_release   = single_release,
-};
-
-
-static int evx_afs_debug_show(struct seq_file *m, void *v)
-{
-        mutex_lock(&evx_afs_lock);
-        seq_printf(m,
-                   "enable=%d writes=%lu ioctls=%lu last_cmd=0x%x last_arg=0x%lx len=%zu\n",
-                   evx_afs_enable, evx_afs_writes, evx_afs_ioctls,
-                   evx_afs_last_cmd, evx_afs_last_arg, evx_afs_len);
-        mutex_unlock(&evx_afs_lock);
-        return 0;
-}
-
-static int evx_afs_debug_open(struct inode *inode, struct file *file)
-{
-        return single_open(file, evx_afs_debug_show, NULL);
-}
-
-static const struct proc_ops evx_afs_debug_fops = {
-        .proc_open      = evx_afs_debug_open,
-        .proc_read      = seq_read,
-        .proc_lseek     = seq_lseek,
-        .proc_release   = single_release,
+	.proc_open = evx_afs_enable_open,
+	.proc_read = seq_read,
+	.proc_write = evx_afs_enable_write,
+	.proc_lseek = seq_lseek,
+	.proc_release = single_release,
 };
 
 static int __init evx_cos_afs_compat_init(void)
 {
-        evx_afs_dir = proc_mkdir("oplus_afs_config", NULL);
-        if (!evx_afs_dir)
-                return 0;
+	struct proc_dir_entry *config, *enable;
 
-        proc_create("afs_config", 0666, evx_afs_dir, &evx_afs_config_fops);
-        proc_create("afs_enable", 0666, evx_afs_dir, &evx_afs_enable_fops);
-        proc_create("afs_debug", 0444, evx_afs_dir, &evx_afs_debug_fops);
+	static_assert(sizeof(struct evx_afs_upload) == 16);
+	static_assert(sizeof(struct evx_afs_scene) == 8);
+	static_assert(sizeof(struct evx_afs_query) == 12);
 
-        pr_info("evonix_cos_afs: AFS binary proc compat ready\n");
-        return 0;
+	evx_afs_dir = proc_mkdir("oplus_afs_config", NULL);
+	if (!evx_afs_dir)
+		return -ENOMEM;
+	config = proc_create("afs_config", 0644, evx_afs_dir, &evx_afs_config_fops);
+	enable = proc_create("afs_enable", 0644, evx_afs_dir, &evx_afs_enable_fops);
+	if (!config || !enable ||
+	    !proc_create("afs_debug", 0444, evx_afs_dir, &evx_afs_config_fops)) {
+		remove_proc_subtree("oplus_afs_config", NULL);
+		return -ENOMEM;
+	}
+	proc_set_user(config, KUIDT_INIT(1000), KGIDT_INIT(1000));
+	proc_set_user(enable, KUIDT_INIT(1000), KGIDT_INIT(1000));
+	return 0;
 }
 
 module_init(evx_cos_afs_compat_init);
+MODULE_DESCRIPTION("ColorOS AFS scene configuration transport");
+MODULE_LICENSE("GPL");

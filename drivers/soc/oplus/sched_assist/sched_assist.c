@@ -213,6 +213,9 @@ static int __init oplus_sched_assist_init(void)
 	/* compile time checks for vendor data size */
 	OPLUS_OEM_DATA_SIZE_TEST(struct oplus_rq, struct rq);
 
+	/* Runqueue locks must exist before task metadata and callbacks. */
+	sched_assist_init_oplus_rq();
+
 	ret = sa_oemdata_init();
 	if (ret != 0)
 		return ret;
@@ -222,7 +225,6 @@ static int __init oplus_sched_assist_init(void)
 	global_sched_assist_enabled |= FEATURE_SPREAD;
 #endif /* CONFIG_OPLUS_FEATURE_SCHED_SPREAD */
 
-	sched_assist_init_oplus_rq();
 	update_ux_sched_cputopo();
 #ifdef CONFIG_OPLUS_FEATURE_TICK_GRAN
 	resched_timer_init();
@@ -242,6 +244,7 @@ static int __init oplus_sched_assist_init(void)
 
 	hmbird_sched_ops_init();
 
+	smp_store_release(&evonix_sa_initialized, true);
 	ux_debug("sched assist init succeed!\n");
 	return 0;
 }

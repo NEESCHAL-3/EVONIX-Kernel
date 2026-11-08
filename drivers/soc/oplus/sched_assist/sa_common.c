@@ -195,6 +195,12 @@ struct ux_sched_cputopo ux_sched_cputopo;
  * Do not share rq->android_oem_data1 with Xiaomi/MTK scheduler modules.
  */
 static struct oplus_rq evonix_oplus_rq_data[NR_CPUS];
+static DEFINE_PER_CPU(spinlock_t, evonix_ux_list_locks);
+#if defined(CONFIG_LOCKING_PROTECT) && !defined(CONFIG_LOCKING_LAST_ENTITY)
+static DEFINE_PER_CPU(spinlock_t, evonix_locking_list_locks);
+#endif
+bool evonix_sa_initialized;
+
 
 struct oplus_rq *evonix_get_oplus_rq(struct rq *rq)
 {
@@ -868,7 +874,7 @@ void sched_assist_init_oplus_rq(void)
 		orq = evonix_get_oplus_rq(rq);
 		orq->ux_list = RB_ROOT_CACHED;
 		orq->exec_timeline = RB_ROOT_CACHED;
-		orq->ux_list_lock = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
+		orq->ux_list_lock = &per_cpu(evonix_ux_list_locks, cpu);
 		spin_lock_init(orq->ux_list_lock);
 		orq->nr_running = 0;
 		orq->min_vruntime = 0;
@@ -876,7 +882,7 @@ void sched_assist_init_oplus_rq(void)
 #ifdef CONFIG_LOCKING_PROTECT
 #ifndef CONFIG_LOCKING_LAST_ENTITY
 		INIT_LIST_HEAD(&orq->locking_thread_list);
-		orq->locking_list_lock = kmalloc(sizeof(spinlock_t), GFP_KERNEL);
+		orq->locking_list_lock = &per_cpu(evonix_locking_list_locks, cpu);
 		spin_lock_init(orq->locking_list_lock);
 		orq->rq_locking_task = 0;
 #endif
@@ -1233,6 +1239,10 @@ static void dequeue_ux_thread(struct rq *rq, struct task_struct *p)
 
 void queue_ux_thread(struct rq *rq, struct task_struct *p, int enqueue)
 {
+	/* Direct scheduler calls can precede this driver's initcall. */
+	if (unlikely(!smp_load_acquire(&evonix_sa_initialized)))
+		return;
+
 	if (enqueue)
 		enqueue_ux_thread(rq, p);
 	else

@@ -5157,6 +5157,7 @@ static int mem_cgroup_slab_show(struct seq_file *m, void *p)
 
 static int memory_stat_show(struct seq_file *m, void *v);
 
+#ifndef CONFIG_EVONIX_OPLUS_HYBRIDSWAP
 static int mem_cgroup_name_seq_show(struct seq_file *m, void *v)
 {
 	struct cgroup_subsys_state *css = seq_css(m);
@@ -5180,12 +5181,16 @@ static ssize_t mem_cgroup_name_write(struct kernfs_open_file *of,
 	return nbytes;
 }
 
+#endif
+
 static struct cftype mem_cgroup_legacy_files[] = {
+#ifndef CONFIG_EVONIX_OPLUS_HYBRIDSWAP
 	{
 		.name = "name",
 		.seq_show = mem_cgroup_name_seq_show,
 		.write = mem_cgroup_name_write,
 	},
+#endif
 	{
 		.name = "usage_in_bytes",
 		.private = MEMFILE_PRIVATE(_MEM, RES_USAGE),

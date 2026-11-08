@@ -5,3 +5,11 @@ config OPLUS_FEATURE_FRAME_BOOST
         help
           Enable native OPlus Frame Boost core.
           CFBT and GEAS are intentionally disabled.
+
+config EVONIX_OPLUS_FRAME_IOCTL
+        bool "Oplus native FrameBoost control protocol"
+        depends on OPLUS_FEATURE_FRAME_BOOST
+        default n
+        help
+          Route Oplus frame-control ioctls to the native FrameBoost core.
+          Requires userspace ABI and on-device validation before production.

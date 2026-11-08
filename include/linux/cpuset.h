@@ -20,6 +20,8 @@
 
 #ifdef CONFIG_CPUSETS
 
+struct cgroup_subsys_state;
+
 /*
  * Static branch rewrites can happen in an arbitrary order for a given
  * key. In code paths where we need to loop with read_mems_allowed_begin() and
@@ -75,6 +77,8 @@ extern void dec_dl_tasks_cs(struct task_struct *task);
 extern void cpuset_lock(void);
 extern void cpuset_unlock(void);
 extern void cpuset_cpus_allowed(struct task_struct *p, struct cpumask *mask);
+extern bool cpuset_css_cpus_allowed(struct cgroup_subsys_state *css,
+				    struct cpumask *mask);
 extern bool cpuset_cpus_allowed_fallback(struct task_struct *p);
 extern nodemask_t cpuset_mems_allowed(struct task_struct *p);
 #define cpuset_current_mems_allowed (current->mems_allowed)

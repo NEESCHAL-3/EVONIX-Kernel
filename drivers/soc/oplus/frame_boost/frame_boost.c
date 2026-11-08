@@ -16,6 +16,9 @@
 #include "frame_boost.h"
 #include "frame_debug.h"
 #include "frame_timer.h"
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_FRAME_IOCTL)
+#include "frame_ioctl.h"
+#endif
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_CFBT)
 #include "cfbt_boost.h"
@@ -36,19 +39,20 @@ static struct kprobe kp = {
 
 static inline bool vaild_stune_boost_type(unsigned int type)
 {
-	return (type >= 0) && (type < BOOST_MAX_TYPE);
+	return type < BOOST_MAX_TYPE;
 }
 
 void fbg_set_stune_boost(int value, int grp_id, unsigned int type)
 {
 	struct frame_group *grp = NULL;
 
-	if (!vaild_stune_boost_type(type))
+	if (grp_id < 0 || grp_id >= MAX_NUM_FBG_ID ||
+	    !vaild_stune_boost_type(type))
 		return;
-	grp = frame_boost_groups[grp_id];
+	grp = READ_ONCE(frame_boost_groups[grp_id]);
 	if (!grp)
 		return;
-	grp->stune_boost[type] = value;
+	WRITE_ONCE(grp->stune_boost[type], value);
 }
 EXPORT_SYMBOL_GPL(fbg_set_stune_boost);
 
@@ -56,12 +60,13 @@ int fbg_get_stune_boost(int grp_id, unsigned int type)
 {
 	struct frame_group *grp = NULL;
 
-	if (!vaild_stune_boost_type(type))
+	if (grp_id < 0 || grp_id >= MAX_NUM_FBG_ID ||
+	    !vaild_stune_boost_type(type))
 		return 0;
-	grp = frame_boost_groups[grp_id];
+	grp = READ_ONCE(frame_boost_groups[grp_id]);
 	if (!grp)
 		return 0;
-	return grp->stune_boost[type];
+	return READ_ONCE(grp->stune_boost[type]);
 }
 EXPORT_SYMBOL_GPL(fbg_get_stune_boost);
 
@@ -153,6 +158,12 @@ static int oplus_frame_boost_finish_init(void)
          * hooks and callbacks are ready.
          */
         fbg_sysctl_init();
+        frame_group_activate();
+#if IS_ENABLED(CONFIG_EVONIX_OPLUS_FRAME_IOCTL)
+        ret = frame_ioctl_init();
+        if (ret)
+                goto out;
+#endif
 
         pr_info("FrameBoost: initialized after cpufreq policies became ready\n");
         ofb_debug("oplus_bsp_frame_boost.ko init succeed!!\n");

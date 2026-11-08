@@ -20,6 +20,7 @@
 #include <linux/pid.h>
 
 #ifdef CONFIG_CPU_FREQ_TIMES
+unsigned int cpufreq_times_lookup_frequency(unsigned int cpu, unsigned int state);
 void cpufreq_task_times_init(struct task_struct *p);
 void cpufreq_task_times_alloc(struct task_struct *p);
 void cpufreq_task_times_exit(struct task_struct *p);
@@ -30,6 +31,11 @@ void cpufreq_times_create_policy(struct cpufreq_policy *policy);
 void cpufreq_times_record_transition(struct cpufreq_policy *policy,
                                      unsigned int new_freq);
 #else
+static inline unsigned int cpufreq_times_lookup_frequency(unsigned int cpu,
+						unsigned int state)
+{
+	return 0;
+}
 static inline void cpufreq_task_times_init(struct task_struct *p) {}
 static inline void cpufreq_task_times_alloc(struct task_struct *p) {}
 static inline void cpufreq_task_times_exit(struct task_struct *p) {}

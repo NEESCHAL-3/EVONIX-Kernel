@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-2.0-only
+menuconfig EVONIX_OPLUS_HYBRIDSWAP
+	bool "Oplus HybridSwap storage-backed RAM expansion for Rodin"
+	depends on ARM64 && MEMCG && ANDROID_VENDOR_HOOKS
+	depends on ZRAM = n && ZSMALLOC = n
+	default n
+	help
+	  Build the Oplus compressed RAM driver, allocator and storage-backed
+	  HybridSwap backend. This replaces the existing ZRAM implementation;
+	  both providers must never be loaded together. The MediaTek display
+	  notifier module must be available before loading HybridSwap.
+
+if EVONIX_OPLUS_HYBRIDSWAP
+
+config EVONIX_OPLUS_HYBRIDSWAP_BUILTIN
+	bool "Build the native RAM expansion backend into EVONIX"
+	depends on HYBRIDSWAP_ZRAM = y && HYBRID_ZSMALLOC = y
+	default n
+	help
+	  Include the real allocator, ZRAM storage backend and MediaTek display
+	  notifier in the kernel image. Requests for redundant ROM modules are
+	  recognized only after their built-in providers initialize successfully.
+	  This mode does not require modifying vendor_boot or DLKM images.
+
+source "drivers/block/oplus_hybridswap/hybridswap_zram/Kconfig"
+
+config HYBRID_ZSMALLOC_CHAIN_SIZE
+	int "HybridSwap allocator maximum pages per zspage"
+	depends on HYBRID_ZSMALLOC
+	default 8
+	range 4 16
+
+config HYBRID_ZSMALLOC_STAT
+	bool "Export HybridSwap allocator statistics"
+	depends on HYBRID_ZSMALLOC
+	select DEBUG_FS
+	default n
+
+config HYBRIDSWAP_ZRAM_DEF_COMP
+	string
+	depends on HYBRIDSWAP_ZRAM
+	default "lz4"
+
+endif
