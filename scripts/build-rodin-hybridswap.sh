@@ -17,7 +17,7 @@ import re, sys
 root, out = map(Path, sys.argv[1:])
 symbols=set()
 for p in (root/'android').glob('abi_gki_aarch64*'):
-    if not p.is_file() or p.suffix or not p.read_bytes().lstrip().startswith(b'[abi_symbol_list]'):
+    if not p.is_file() or p.suffix not in ('', '.hybridswap') or not p.read_bytes().lstrip().startswith(b'[abi_symbol_list]'):
         continue
     for line in p.read_text().splitlines():
         line=line.split('#',1)[0].strip()
