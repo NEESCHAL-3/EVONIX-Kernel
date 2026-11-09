@@ -664,8 +664,6 @@
   input_release_device
   input_set_poll_interval
   input_setup_polling
-  kernel_read
-  kernel_write
   page_relinquish_disallowed
   pci_d3cold_disable
   rtc_month_days
