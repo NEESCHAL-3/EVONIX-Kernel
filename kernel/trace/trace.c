@@ -10073,6 +10073,9 @@ static struct notifier_block trace_module_nb = {
 
 static __init void tracer_init_tracefs_work_func(struct work_struct *work)
 {
+	/* Tracing initialization may have failed during early boot. */
+	if (tracing_disabled)
+		return;
 
 	event_trace_init();
 
