@@ -2202,6 +2202,7 @@ static int free_segment_range(struct f2fs_sb_info *sbi,
 	struct cp_control cpc = { CP_RESIZE, 0, 0, 0 };
 	unsigned int freed_secs = 0;
 	int gc_mode, gc_type;
+	unsigned int freed_secs = 0;
 	int err = 0;
 	int type;
 
