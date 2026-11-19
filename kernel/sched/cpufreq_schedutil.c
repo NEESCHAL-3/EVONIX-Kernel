@@ -585,7 +585,12 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 
 #ifdef CONFIG_EVONIX_SCHEDUTIL
 	if (all_idle && !any_iowait && sg_policy->tunables->idle_fast_down) {
-		sg_policy->need_freq_update = true;
+		/*
+		 * Request policy->min when all CPUs in the policy are idle.
+		 * Do not bypass down_delay_ns with need_freq_update, ensuring
+		 * the transition respects down rate limiting to prevent
+		 * PLL and voltage oscillation during sub-millisecond idle bubbles.
+		 */
 		return policy->min;
 	}
 #endif
@@ -918,10 +923,10 @@ static struct sugov_tunables *sugov_tunables_alloc(struct sugov_policy *sg_polic
 		if (!have_governor_per_policy())
 			global_tunables = tunables;
 #ifdef CONFIG_EVONIX_SCHEDUTIL
-		tunables->up_rate_limit_us = 500;
-		tunables->down_rate_limit_us = 20000;
+		tunables->up_rate_limit_us = 1000;
+		tunables->down_rate_limit_us = 4000;
 		tunables->headroom_mode = 1;
-		tunables->idle_fast_down = 1;
+		tunables->idle_fast_down = 0;
 #endif
 	}
 	return tunables;
