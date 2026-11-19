@@ -49,7 +49,7 @@
 #include "mount.h"
 
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-extern bool susfs_is_inode_sus_path(struct mnt_idmap* idmap, struct inode *inode);
+extern __attribute__((hot)) bool susfs_is_inode_sus_path(struct inode *inode);
 extern const struct qstr susfs_fake_qstr_name;
 #endif
 #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
@@ -1597,7 +1597,7 @@ static struct dentry *lookup_dcache(const struct qstr *name,
 		}
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-	if (dentry && !IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode)) {
+	if (dentry && !IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
 		dput(dentry);
@@ -1645,7 +1645,7 @@ retry:
 		dentry = old;
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode)) {
+	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(dentry->d_inode)) {
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
 		if (!(flags & LOOKUP_RCU))
@@ -1676,7 +1676,7 @@ static struct dentry *lookup_fast(struct nameidata *nd)
 		dentry = __d_lookup_rcu(parent, &nd->last, &nd->next_seq);
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
-			susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode))
+			susfs_is_inode_sus_path(dentry->d_inode))
 		{
 			if (d_in_lookup(dentry))
 				d_lookup_done(dentry);
@@ -1709,7 +1709,7 @@ static struct dentry *lookup_fast(struct nameidata *nd)
 		dentry = __d_lookup(parent, &nd->last);
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
-			susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode))
+			susfs_is_inode_sus_path(dentry->d_inode))
 		{
 			if (d_in_lookup(dentry))
 				d_lookup_done(dentry);
@@ -1780,7 +1780,7 @@ retry:
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	if (is_nd_flags_lookup_last && !found_sus_path && dentry && !IS_ERR(dentry) && dentry->d_inode &&
-		susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode))
+		susfs_is_inode_sus_path(dentry->d_inode))
 	{
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
@@ -2367,7 +2367,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		struct dentry *dentry = nd->path.dentry;
 
-		if (dentry->d_inode && susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode)) {
+		if (dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
 			// - No need to dput() here
 			// - return -ENOENT here since it is walking the sub path of sus path
 			return -ENOENT;
@@ -3524,7 +3524,7 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
 	dentry = d_lookup(dir, &nd->last);
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	if (is_nd_state_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
-		susfs_is_inode_sus_path(&nop_mnt_idmap, dentry->d_inode))
+		susfs_is_inode_sus_path(dentry->d_inode))
 	{
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
