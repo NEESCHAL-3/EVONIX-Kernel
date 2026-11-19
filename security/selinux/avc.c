@@ -48,11 +48,6 @@
 #undef CREATE_TRACE_POINTS
 #include <trace/hooks/avc.h>
 
-#ifdef CONFIG_KSU_SUSFS
-extern u32 susfs_ksu_sid;
-extern u32 susfs_priv_app_sid;
-extern struct static_key_false susfs_is_avc_log_spoofing_enabled;
-#endif
 
 struct avc_entry {
 	u32			ssid;
@@ -595,7 +590,7 @@ static int avc_latest_notif_update(u32 seqno, int is_insert)
 		}
 	} else {
 		if (seqno > selinux_avc.avc_cache.latest_notif)
-			selinux_avc.avc_cache.latest_notif = seqno;
+			WRITE_ONCE(selinux_avc.avc_cache.latest_notif, seqno);
 	}
 	spin_unlock_irqrestore(&notif_lock, flag);
 
@@ -726,24 +721,10 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 
 	rc = security_sid_to_context(sad->tsid, &tcontext,
 				     &tcontext_len);
-#ifdef CONFIG_KSU_SUSFS
-	if (static_branch_likely(&susfs_is_avc_log_spoofing_enabled)) {
-		if (unlikely(sad->tsid == susfs_ksu_sid)) {
-			if (rc)
-				audit_log_format(ab, " tsid=%d", susfs_priv_app_sid);
-			else
-				audit_log_format(ab, " tcontext=%s", "u:r:priv_app:s0:c512,c768");
-			goto bypass_orig_flow;
-		}
-	}
-#endif
 	if (rc)
 		audit_log_format(ab, " tsid=%d", sad->tsid);
 	else
 		audit_log_format(ab, " tcontext=%s", tcontext);
-#ifdef CONFIG_KSU_SUSFS
-bypass_orig_flow:
-#endif
 	tclass = secclass_map[sad->tclass-1].name;
 	audit_log_format(ab, " tclass=%s", tclass);
 
@@ -1179,8 +1160,10 @@ inline int avc_has_perm_noaudit(u32 ssid, u32 tsid,
 	u32 denied;
 	struct avc_node *node;
 
-	if (WARN_ON(!requested))
+	if (WARN_ON(!requested)) {
+		*avd = (struct av_decision){ .auditdeny = 0xffffffff };
 		return -EACCES;
+	}
 
 	rcu_read_lock();
 	node = avc_lookup(ssid, tsid, tclass);
@@ -1233,5 +1216,5 @@ int avc_has_perm(u32 ssid, u32 tsid, u16 tclass,
 
 u32 avc_policy_seqno(void)
 {
-	return selinux_avc.avc_cache.latest_notif;
+	return READ_ONCE(selinux_avc.avc_cache.latest_notif);
 }

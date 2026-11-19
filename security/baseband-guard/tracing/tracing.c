@@ -45,7 +45,7 @@ int bb_bprm_set_creds(struct linux_binprm *bprm)
 
 	/*
 	 * Lookup happens only on exec, never on ordinary read/write paths.
-	 * Refresh missing contexts when KernelSU/Magisk updates the policy;
+	 * Refresh missing contexts following SELinux policy updates;
 	 * do not permanently cache an early-boot context lookup failure.
 	 */
 	mutex_lock(&bbg_sid_lock);

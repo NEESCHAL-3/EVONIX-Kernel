@@ -527,17 +527,6 @@ out:
 	kfree(scontext_name);
 }
 
-#ifdef CONFIG_KSU_SUSFS
-void security_dump_masked_av_fn(struct policydb *policydb,
-				    struct context *scontext,
-				    struct context *tcontext,
-				    u16 tclass,
-				    u32 permissions,
-				    const char *reason)
-{
-	security_dump_masked_av(policydb, scontext, tcontext, tclass, permissions, reason);
-}
-#endif // #ifdef CONFIG_KSU_SUSFS
 
 /*
  * security_boundary_permission - drops violated permissions
@@ -727,17 +716,6 @@ static void context_struct_compute_av(struct policydb *policydb,
 				 tclass, avd);
 }
 
-#ifdef CONFIG_KSU_SUSFS
-void context_struct_compute_av_fn(struct policydb *policydb,
-				      struct context *scontext,
-				      struct context *tcontext,
-				      u16 tclass,
-				      struct av_decision *avd,
-				      struct extended_perms *xperms)
-{
-	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd, xperms);
-}
-#endif // #ifdef CONFIG_KSU_SUSFS
 
 static int security_validtrans_handle_fail(struct selinux_policy *policy,
 					struct sidtab_entry *oentry,
@@ -3378,6 +3356,7 @@ int security_get_classes(struct selinux_policy *policy,
 			 char ***classes, u32 *nclasses)
 {
 	struct policydb *policydb;
+	u32 i;
 	int rc;
 
 	policydb = &policy->policydb;
@@ -3390,15 +3369,22 @@ int security_get_classes(struct selinux_policy *policy,
 
 	rc = hashtab_map(&policydb->p_classes.table, get_classes_callback,
 			 *classes);
-	if (rc) {
-		u32 i;
+	if (rc)
+		goto err;
 
-		for (i = 0; i < *nclasses; i++)
-			kfree((*classes)[i]);
-		kfree(*classes);
+	for (i = 0; i < *nclasses; i++) {
+		if (!(*classes)[i]) {
+			rc = -EINVAL;
+			goto err;
+		}
 	}
 
 out:
+	return rc;
+err:
+	for (i = 0; i < *nclasses; i++)
+		kfree((*classes)[i]);
+	kfree(*classes);
 	return rc;
 }
 
