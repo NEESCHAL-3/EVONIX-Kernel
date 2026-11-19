@@ -7748,6 +7748,32 @@ static void __setscheduler_params(struct task_struct *p,
 	set_load_weight(p, true);
 }
 
+#ifdef CONFIG_RT_MUTEXES
+static inline void __setscheduler_dl_pi(int newprio, int policy,
+                                        struct task_struct *p,
+                                        int *queue_flags)
+{
+    /*
+     * Preserve deadline inheritance when a boosted task
+     * changes to a lower scheduling class.
+     */
+    if (dl_prio(newprio) && !dl_policy(policy)) {
+        struct task_struct *pi_task = rt_mutex_get_top_task(p);
+
+        if (pi_task) {
+            p->dl.pi_se = pi_task->dl.pi_se;
+            *queue_flags |= ENQUEUE_REPLENISH;
+        }
+    }
+}
+#else
+static inline void __setscheduler_dl_pi(int newprio, int policy,
+                                        struct task_struct *p,
+                                        int *queue_flags)
+{
+}
+#endif
+
 /*
  * Check the target process has a UID that matches the current process's:
  */
@@ -8022,6 +8048,7 @@ change:
 	if (!(attr->sched_flags & SCHED_FLAG_KEEP_PARAMS)) {
 		__setscheduler_params(p, attr);
 		__setscheduler_prio(p, newprio);
+		__setscheduler_dl_pi(newprio, policy, p, &queue_flags);
 		trace_android_rvh_setscheduler(p);
 	}
 	__setscheduler_uclamp(p, attr);
@@ -8568,7 +8595,7 @@ __sched_setaffinity(struct task_struct *p, struct affinity_context *ctx)
 			bool empty = !cpumask_and(new_mask, new_mask,
 						  ctx->user_mask);
 
-			if (WARN_ON_ONCE(empty))
+			if (empty)
 				cpumask_copy(new_mask, cpus_allowed);
 		}
 		__set_cpus_allowed_ptr(p, ctx);
