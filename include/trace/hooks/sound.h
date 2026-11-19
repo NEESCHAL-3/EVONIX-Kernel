@@ -20,4 +20,3 @@ DECLARE_HOOK(android_vh_snd_get_play_cap,
 #endif /* _TRACE_HOOK_SOUND_H */
 /* This part must be outside protection */
 #include <trace/define_trace.h>
-

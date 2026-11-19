@@ -1260,6 +1260,7 @@ void emergency_thaw_all(void)
 
 static DEFINE_IDA(unnamed_dev_ida);
 
+
 /**
  * get_anon_bdev - Allocate a block device for filesystems which don't have one.
  * @p: Pointer to a dev_t.
@@ -1274,6 +1275,7 @@ static DEFINE_IDA(unnamed_dev_ida);
 int get_anon_bdev(dev_t *p)
 {
 	int dev;
+
 
 	/*
 	 * Many userspace utilities consider an FSID of 0 invalid.

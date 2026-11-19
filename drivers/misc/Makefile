@@ -70,11 +70,15 @@ obj-$(CONFIG_TPS6594_PFSM)	+= tps6594-pfsm.o
 obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
 obj-$(CONFIG_PKVM_SMC_FILTER)  += pkvm-smc/
 
-# EVONIX ColorOS compatibility
-obj-y += evonix_cos/
 
 # EVONIX ColorOS OEM charger-policy bypass
 obj-y += evonix_oem_bypass.o
 
 # Evonix Rodin kernel optimizer
 # EVONIX v3.1: use the stock MediaTek scheduling, FPSGO and thermal stack
+
+# EVONIX HyperOS OEM charger-policy bypass
+obj-y += evonix_oem_bypass.o
+
+# EVONIX native ColorOS compatibility layer
+obj-y += evonix_cos/

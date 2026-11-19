@@ -7845,7 +7845,6 @@ F:	.github/
 F:	Documentation/evonix/
 F:	README.md
 F:	arch/arm64/configs/evonix.config
-F:	drivers/misc/evonix_cos/
 F:	drivers/misc/evonix_rodin/
 N:	evonix
 

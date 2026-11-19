@@ -206,6 +206,7 @@ config ARM64
 		if DYNAMIC_FTRACE_WITH_ARGS
 	select HAVE_SAMPLE_FTRACE_DIRECT
 	select HAVE_SAMPLE_FTRACE_DIRECT_MULTI
+	select HAVE_BUILDTIME_MCOUNT_SORT
 	select HAVE_EFFICIENT_UNALIGNED_ACCESS
 	select HAVE_FAST_GUP
 	select HAVE_FTRACE_MCOUNT_RECORD
@@ -420,6 +421,7 @@ menu "Kernel Features"
 config ARM64_TUNE_CORTEX_A725
 	bool "Tune generated code for Cortex-A725"
 	depends on CC_IS_CLANG
+	depends on $(cc-option,-mtune=cortex-a725)
 	help
 	  Optimize instruction scheduling for the Cortex-A725 CPUs used by
 	  MediaTek MT6899 / rodin. This is compiler tuning only: unlike -mcpu
@@ -1165,6 +1167,18 @@ config ARM64_ERRATUM_3194386
 	  SSBS. The presence of the SSBS special-purpose register is hidden
 	  from hwcaps and EL0 reads of ID_AA64PFR1_EL1, such that userspace
 	  will use the PR_SPEC_STORE_BYPASS prctl to change SSBS.
+
+	  If unsure, say Y.
+
+config ARM64_ERRATUM_4193714
+	bool "C1-Pro: 4193714: SME DVMSync early acknowledgement"
+	depends on ARM64_SME
+	default y
+	help
+	  Enable workaround for C1-Pro acknowledging the DVMSync before
+	  the SME memory accesses are complete. This will cause TLB
+	  maintenance for processes using SME to also issue an IPI to
+	  the affected CPUs.
 
 	  If unsure, say Y.
 

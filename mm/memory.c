@@ -82,9 +82,6 @@
 #include <linux/vmalloc.h>
 #include <linux/sched/sysctl.h>
 #include <linux/zswap.h>
-#ifdef CONFIG_KSU_SUSFS_SUS_MAP
-#include <linux/susfs_def.h>
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 
 #include <trace/events/kmem.h>
 #include <trace/hooks/mm.h>
@@ -1643,7 +1640,7 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 			 * consider uffd-wp bit when zap. For more information,
 			 * see zap_install_uffd_wp_if_needed().
 			 */
-			WARN_ON_ONCE(!vma_is_anonymous(vma));
+			WARN_ON_ONCE(!folio_test_anon(folio));
 			rss[mm_counter(folio)]--;
 			if (is_device_private_entry(entry))
 				folio_remove_rmap_pte(folio, page, vma);
@@ -6531,18 +6528,8 @@ int __access_remote_vm(struct mm_struct *mm, unsigned long addr, void *buf,
 		int bytes, offset;
 		void *maddr;
 		struct vm_area_struct *vma = NULL;
-#ifdef CONFIG_KSU_SUSFS_SUS_MAP
-		struct page *page = NULL;
-
-		if (vma && vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
-			break;
-
-		page = get_user_page_vma_remote(mm, addr,
-							     gup_flags, &vma);
-#else
 		struct page *page = get_user_page_vma_remote(mm, addr,
 							     gup_flags, &vma);
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 
 		if (IS_ERR_OR_NULL(page)) {
 			/* We might need to expand the stack to access it */
