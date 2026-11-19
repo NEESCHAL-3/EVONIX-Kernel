@@ -13,6 +13,12 @@
 struct sugov_tunables {
 	struct gov_attr_set	attr_set;
 	unsigned int		rate_limit_us;
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	unsigned int		up_rate_limit_us;
+	unsigned int		down_rate_limit_us;
+	unsigned int		headroom_mode;
+	unsigned int		idle_fast_down;
+#endif
 };
 
 struct sugov_policy {
@@ -24,6 +30,10 @@ struct sugov_policy {
 	raw_spinlock_t		update_lock;
 	u64			last_freq_update_time;
 	s64			freq_update_delay_ns;
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	s64			up_delay_ns;
+	s64			down_delay_ns;
+#endif
 	unsigned int		next_freq;
 	unsigned int		cached_raw_freq;
 
@@ -70,6 +80,12 @@ static void sugov_update_rate_limit_us(struct sugov_policy *sg_policy)
 	 */
 	sg_policy->freq_update_delay_ns =
 		(s64)sg_policy->tunables->rate_limit_us * NSEC_PER_USEC;
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	sg_policy->up_delay_ns =
+		(s64)sg_policy->tunables->up_rate_limit_us * NSEC_PER_USEC;
+	sg_policy->down_delay_ns =
+		(s64)sg_policy->tunables->down_rate_limit_us * NSEC_PER_USEC;
+#endif
 }
 
 static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
@@ -102,12 +118,34 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 
 	delta_ns = time - sg_policy->last_freq_update_time;
 
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	return delta_ns >= min(sg_policy->up_delay_ns, sg_policy->down_delay_ns);
+#else
 	return delta_ns >= sg_policy->freq_update_delay_ns;
+#endif
 }
 
 static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
 				   unsigned int next_freq)
 {
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	s64 delta_ns = time - sg_policy->last_freq_update_time;
+
+	if (sg_policy->need_freq_update) {
+		sg_policy->need_freq_update = false;
+		if (sg_policy->next_freq == next_freq &&
+		    !cpufreq_driver_test_flags(CPUFREQ_NEED_UPDATE_LIMITS))
+			return false;
+	} else if (sg_policy->next_freq == next_freq) {
+		return false;
+	} else if (next_freq > sg_policy->next_freq) {
+		if (delta_ns < sg_policy->up_delay_ns)
+			return false;
+	} else if (next_freq < sg_policy->next_freq) {
+		if (delta_ns < sg_policy->down_delay_ns)
+			return false;
+	}
+#else
 	if (sg_policy->need_freq_update) {
 		sg_policy->need_freq_update = false;
 		/*
@@ -124,6 +162,7 @@ static bool sugov_update_next_freq(struct sugov_policy *sg_policy, u64 time,
 	} else if (sg_policy->next_freq == next_freq) {
 		return false;
 	}
+#endif
 
 	sg_policy->next_freq = next_freq;
 	sg_policy->last_freq_update_time = time;
@@ -187,6 +226,33 @@ unsigned long get_capacity_ref_freq(struct cpufreq_policy *policy)
  * next_freq (as calculated above) is returned, subject to policy min/max and
  * cpufreq driver limitations.
  */
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+/*
+ * EVONIX Dynamic Headroom Curve:
+ * Continuous, strictly monotonic piecewise-linear function:
+ *  - [0, 350]: +35% headroom (V(350) = 472)
+ *  - (350, 750]: tapers to +20% headroom (V(750) = 900)
+ *  - (750, 1024]: tapers to +10% headroom (V(1024) = 1126)
+ *  - >1024: linearly extended without overflow
+ */
+static __always_inline unsigned long evonix_map_util_perf(unsigned long util,
+							 struct sugov_policy *sg_policy)
+{
+	if (!sg_policy || !sg_policy->tunables || sg_policy->tunables->headroom_mode == 0)
+		return map_util_perf(util);
+
+	if (util <= 350) {
+		return (util * 472) / 350;
+	} else if (util <= 750) {
+		return 472 + (((util - 350) * 428) / 400);
+	} else if (util <= 1024) {
+		return 900 + (((util - 750) * 226) / 274);
+	} else {
+		return 1126 + (util - 1024);
+	}
+}
+#endif
+
 static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 				  unsigned long util, unsigned long max)
 {
@@ -195,7 +261,11 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	unsigned long next_freq = 0;
 
 	freq = get_capacity_ref_freq(policy);
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	util = evonix_map_util_perf(util, sg_policy);
+#else
 	util = map_util_perf(util);
+#endif
 	trace_android_vh_map_util_freq(util, freq, max, &next_freq, policy,
 			&sg_policy->need_freq_update);
 	if (next_freq)
@@ -399,6 +469,13 @@ static void sugov_update_single_freq(struct update_util_data *hook, u64 time,
 	if (!sugov_update_single_common(sg_cpu, time, max_cap, flags))
 		return;
 
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	if (sg_policy->tunables->idle_fast_down &&
+	    idle_cpu(sg_cpu->cpu) && !sg_cpu->iowait_boost_pending) {
+		next_f = sg_policy->policy->min;
+		sg_policy->need_freq_update = true;
+	} else
+#endif
 	next_f = get_next_freq(sg_policy, sg_cpu->util, max_cap);
 	/*
 	 * Do not reduce the frequency if the CPU has not been idle
@@ -464,8 +541,15 @@ static void sugov_update_single_perf(struct update_util_data *hook, u64 time,
 	    sugov_cpu_is_busy(sg_cpu) && sg_cpu->util < prev_util)
 		sg_cpu->util = prev_util;
 
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	unsigned long util_perf = evonix_map_util_perf(sg_cpu->util, sg_cpu->sg_policy);
+
+	cpufreq_driver_adjust_perf(sg_cpu->cpu, map_util_perf(sg_cpu->bw_dl),
+				   map_util_perf(util_perf), max_cap);
+#else
 	cpufreq_driver_adjust_perf(sg_cpu->cpu, map_util_perf(sg_cpu->bw_dl),
 				   map_util_perf(sg_cpu->util), max_cap);
+#endif
 
 	sg_cpu->sg_policy->last_freq_update_time = time;
 }
@@ -476,6 +560,10 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned long util = 0, max_cap;
 	unsigned int j;
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	bool all_idle = true;
+	bool any_iowait = false;
+#endif
 
 	max_cap = arch_scale_cpu_capacity(sg_cpu->cpu);
 
@@ -486,7 +574,21 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 		sugov_iowait_apply(j_sg_cpu, time, max_cap);
 
 		util = max(j_sg_cpu->util, util);
+
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+		if (!idle_cpu(j))
+			all_idle = false;
+		if (j_sg_cpu->iowait_boost_pending)
+			any_iowait = true;
+#endif
 	}
+
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	if (all_idle && !any_iowait && sg_policy->tunables->idle_fast_down) {
+		sg_policy->need_freq_update = true;
+		return policy->min;
+	}
+#endif
 
 	return get_next_freq(sg_policy, util, max_cap);
 }
@@ -592,8 +694,119 @@ rate_limit_us_store(struct gov_attr_set *attr_set, const char *buf, size_t count
 
 static struct governor_attr rate_limit_us = __ATTR_RW(rate_limit_us);
 
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+static ssize_t up_rate_limit_us_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->up_rate_limit_us);
+}
+
+static ssize_t
+up_rate_limit_us_store(struct gov_attr_set *attr_set, const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	struct sugov_policy *sg_policy;
+	unsigned int val;
+
+	if (kstrtouint(buf, 10, &val))
+		return -EINVAL;
+
+	tunables->up_rate_limit_us = val;
+
+	list_for_each_entry(sg_policy, &attr_set->policy_list, tunables_hook)
+		sugov_update_rate_limit_us(sg_policy);
+
+	return count;
+}
+
+static ssize_t down_rate_limit_us_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->down_rate_limit_us);
+}
+
+static ssize_t
+down_rate_limit_us_store(struct gov_attr_set *attr_set, const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	struct sugov_policy *sg_policy;
+	unsigned int val;
+
+	if (kstrtouint(buf, 10, &val))
+		return -EINVAL;
+
+	tunables->down_rate_limit_us = val;
+
+	list_for_each_entry(sg_policy, &attr_set->policy_list, tunables_hook)
+		sugov_update_rate_limit_us(sg_policy);
+
+	return count;
+}
+
+static ssize_t headroom_mode_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->headroom_mode);
+}
+
+static ssize_t
+headroom_mode_store(struct gov_attr_set *attr_set, const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned int val;
+
+	if (kstrtouint(buf, 10, &val))
+		return -EINVAL;
+
+	if (val > 1)
+		return -EINVAL;
+
+	tunables->headroom_mode = val;
+
+	return count;
+}
+
+static ssize_t idle_fast_down_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->idle_fast_down);
+}
+
+static ssize_t
+idle_fast_down_store(struct gov_attr_set *attr_set, const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned int val;
+
+	if (kstrtouint(buf, 10, &val))
+		return -EINVAL;
+
+	if (val > 1)
+		return -EINVAL;
+
+	tunables->idle_fast_down = val;
+
+	return count;
+}
+
+static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
+static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
+static struct governor_attr headroom_mode = __ATTR_RW(headroom_mode);
+static struct governor_attr idle_fast_down = __ATTR_RW(idle_fast_down);
+#endif
+
 static struct attribute *sugov_attrs[] = {
 	&rate_limit_us.attr,
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+	&up_rate_limit_us.attr,
+	&down_rate_limit_us.attr,
+	&headroom_mode.attr,
+	&idle_fast_down.attr,
+#endif
 	NULL
 };
 ATTRIBUTE_GROUPS(sugov);
@@ -704,6 +917,12 @@ static struct sugov_tunables *sugov_tunables_alloc(struct sugov_policy *sg_polic
 		gov_attr_set_init(&tunables->attr_set, &sg_policy->tunables_hook);
 		if (!have_governor_per_policy())
 			global_tunables = tunables;
+#ifdef CONFIG_EVONIX_SCHEDUTIL
+		tunables->up_rate_limit_us = 500;
+		tunables->down_rate_limit_us = 20000;
+		tunables->headroom_mode = 1;
+		tunables->idle_fast_down = 1;
+#endif
 	}
 	return tunables;
 }
