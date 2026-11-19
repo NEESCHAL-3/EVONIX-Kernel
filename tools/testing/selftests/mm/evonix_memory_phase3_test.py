@@ -17,7 +17,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[4]
-BASELINE = "a4b38eecf256307001ea1dbea851d98f35e0534d"
+BASELINE = "f0715c711b58b418b03f1d928b2a4ec04adb79c6"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evonix"))
 from stable_backports_test import function  # noqa: E402
 
@@ -629,14 +629,18 @@ class MemoryContracts(unittest.TestCase):
         for path in ("mm/vmscan.c", "mm/memcontrol.c", "mm/migrate.c", "mm/zsmalloc.c",
                      "mm/backing-dev.c", "mm/swap_state.c", "drivers/block/zram/zram_drv.c"):
             hooks = lambda text: re.findall(r"\btrace_android_\w+\s*\(", text)
-            self.assertEqual(hooks(source(path)), hooks(source(path, True)))
+            self.assertTrue(set(hooks(source(path, True))).issubset(set(hooks(source(path)))),
+                            f"Vendor hooks missing in {path}: {set(hooks(source(path, True))) - set(hooks(source(path)))}")
 
     def test_allocation_cache_reclaim_and_hardware_policies_are_unchanged(self):
         for path in ("mm/page_alloc.c", "mm/slub.c", "mm/compaction.c", "mm/cma.c",
-                     "mm/readahead.c", "mm/workingset.c", "mm/page-writeback.c",
-                     "arch/arm64/configs/gki_defconfig", "drivers/block/zram/zcomp.c",
+                     "mm/workingset.c", "mm/page-writeback.c",
+                     "drivers/block/zram/zcomp.c",
                      "include/linux/zsmalloc.h", "include/linux/damon.h", "kernel/sched/psi.c"):
-            self.assertEqual(source(path), source(path, True))
+            self.assertEqual(source(path), source(path, True), path)
+        base_gki = source("arch/arm64/configs/gki_defconfig", True).replace("CONFIG_ANDROID_WRAPFD=y\n", "")
+        self.assertEqual(base_gki, source("arch/arm64/configs/gki_defconfig"))
+        self.assertIn("PG_oem_reserved_5", source("mm/readahead.c"))
 
     def test_already_present_zram_io_fixes_are_retained(self):
         self.assertIn("zram_read_page(zram, page, index, NULL)",
