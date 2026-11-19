@@ -3332,6 +3332,8 @@ retry:
 	f2fs_unlock_op(sbi, &lc);
 
 	if (has_unpinned_area(sbi) && err == -EAGAIN && gc_required) {
+                if (!sbi->pinned_area_max_secno)
+                        return -ENOSPC;
 		err = f2fs_gc_range(sbi, 0,
 				sbi->pinned_area_max_secno * SEGS_PER_SEC(sbi) - 1,
 				true, ZONED_PIN_SEC_REQUIRED_COUNT, true);
