@@ -1354,6 +1354,24 @@ config LOCK_MM_AND_FIND_VMA
 	bool
 	depends on !STACK_GROWSUP
 
+config EVONIX_MM_OPTIMIZE
+	bool "EVONIX Mobile Memory Management Optimizations"
+	default y
+	help
+	  Enables EVONIX mobile memory optimizations for systems with
+	  Multi-Gen LRU (MGLRU) and compressed swap (ZRAM).
+
+	  Specifically, disables aggressive watermark boosting
+	  (setting default watermark_boost_factor to 0 instead of 15000),
+	  preventing kswapd from over-reclaiming warm page caches and
+	  thrashing ZRAM during high-order burst allocations (e.g. camera
+	  preview buffers, graphics allocations, and app cold starts).
+
+	  The sysctl /proc/sys/vm/watermark_boost_factor remains fully
+	  accessible for runtime adjustment and rollback.
+
+	  If unsure, say Y.
+
 source "mm/damon/Kconfig"
 
 endmenu
