@@ -1236,6 +1236,8 @@
   device_register
   memparse
   register_virtio_device
+  __root_device_register
+  root_device_unregister
   synchronize_irq
   __traceiter_rwmmio_post_read
   __traceiter_rwmmio_post_write
