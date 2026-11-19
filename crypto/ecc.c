@@ -400,6 +400,9 @@ static uint128_t mul_64_64(u64 left, u64 right)
 	return result;
 }
 
+/* Calculate addition with overflow checking. Returns true on wrap-around,
+ * false otherwise.
+ */
 static bool check_add_128_128_overflow(uint128_t *result, uint128_t a,
 				       uint128_t b)
 {
@@ -410,7 +413,9 @@ static bool check_add_128_128_overflow(uint128_t *result, uint128_t a,
 
 	result->m_high = a.m_high + b.m_high + carry;
 
-	/* Constant-time bitwise arithmetic avoids timing side channels. */
+	/* Using constant-time bitwise arithmetic to prevent timing
+	 * side-channels.
+	 */
 	carry = (result->m_high < a.m_high) |
 		((result->m_high == a.m_high) & carry);
 
@@ -439,7 +444,6 @@ static void vli_mult(u64 *result, const u64 *left, const u64 *right,
 			uint128_t product;
 
 			product = mul_64_64(left[i], right[k - i]);
-
 			r2 += check_add_128_128_overflow(&r01, r01, product);
 		}
 

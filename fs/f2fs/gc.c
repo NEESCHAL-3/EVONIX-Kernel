@@ -2137,6 +2137,7 @@ int f2fs_gc_range(struct f2fs_sb_info *sbi,
 		unsigned int start_seg, unsigned int end_seg,
 		bool dry_run, unsigned int dry_run_sections, bool lock)
 {
+	struct f2fs_lock_context lc;
 	unsigned int segno;
 	unsigned int gc_secs = dry_run_sections;
 
@@ -2149,11 +2150,10 @@ int f2fs_gc_range(struct f2fs_sb_info *sbi,
 			.ilist = LIST_HEAD_INIT(gc_list.ilist),
 			.iroot = RADIX_TREE_INIT(gc_list.iroot, GFP_NOFS),
 		};
-		struct f2fs_lock_context gc_lc;
 		int err = 0;
 
 		if (lock)
-			f2fs_down_write_trace(&sbi->gc_lock, &gc_lc);
+			f2fs_down_write_trace(&sbi->gc_lock, &lc);
 
 		/*
 		 * avoid migrating empty section, as it can be allocated by
@@ -2185,7 +2185,7 @@ int f2fs_gc_range(struct f2fs_sb_info *sbi,
 			err = -ERESTARTSYS;
 next:
 		if (lock)
-			f2fs_up_write_trace(&sbi->gc_lock, &gc_lc);
+			f2fs_up_write_trace(&sbi->gc_lock, &lc);
 		if (err)
 			return err;
 		if (dry_run && dry_run_sections && !gc_secs)
@@ -2200,8 +2200,8 @@ static int free_segment_range(struct f2fs_sb_info *sbi,
 {
 	unsigned int secno, next_inuse, start, end, end_secno;
 	struct cp_control cpc = { CP_RESIZE, 0, 0, 0 };
-	int gc_mode, gc_type;
 	unsigned int freed_secs = 0;
+	int gc_mode, gc_type;
 	int err = 0;
 	int type;
 
@@ -2428,7 +2428,7 @@ out_drop_write:
 	set_sbi_flag(sbi, SBI_IS_RESIZEFS);
 	err = free_segment_range(sbi, secs, false);
 	if (err)
-		goto recover_out;
+		goto recover_user_blocks;
 
 	update_sb_metadata(sbi, -secs);
 
@@ -2450,11 +2450,14 @@ out_drop_write:
 		f2fs_commit_super(sbi, false);
 	}
 recover_out:
-	clear_sbi_flag(sbi, SBI_IS_RESIZEFS);
 	if (err) {
+		f2fs_bug_on(sbi, err == -EAGAIN);
 		set_sbi_flag(sbi, SBI_NEED_FSCK);
 		f2fs_err(sbi, "resize_fs failed, should run fsck to repair!");
-
+	}
+recover_user_blocks:
+	clear_sbi_flag(sbi, SBI_IS_RESIZEFS);
+	if (err) {
 		spin_lock(&sbi->stat_lock);
 		sbi->user_block_count += shrunk_blocks;
 		spin_unlock(&sbi->stat_lock);
