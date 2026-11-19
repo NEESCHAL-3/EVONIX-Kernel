@@ -26,7 +26,7 @@
 
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #include <linux/susfs_def.h>
-extern bool susfs_is_inode_sus_path(struct mnt_idmap* idmap, struct inode *inode);
+extern __attribute__((hot)) bool susfs_is_inode_sus_path(struct inode *inode);
 #endif
 /*
  * Some filesystems were never converted to '->iterate_shared()'
@@ -210,7 +210,7 @@ static bool fillonedir(struct dir_context *ctx, const char *name, int namlen,
 	if (!inode) {
 		goto orig_flow;
 	}
-	if (susfs_is_inode_sus_path(buf->idmap, inode)) {
+	if (susfs_is_inode_sus_path(inode)) {
 		iput(inode);
 		return true;
 	}
@@ -321,7 +321,7 @@ static bool filldir(struct dir_context *ctx, const char *name, int namlen,
 	if (!inode) {
 		goto orig_flow;
 	}
-	if (susfs_is_inode_sus_path(buf->idmap, inode)) {
+	if (susfs_is_inode_sus_path(inode)) {
 		iput(inode);
 		return true;
 	}
@@ -428,7 +428,7 @@ static bool filldir64(struct dir_context *ctx, const char *name, int namlen,
 	if (!inode) {
 		goto orig_flow;
 	}
-	if (susfs_is_inode_sus_path(buf->idmap, inode)) {
+	if (susfs_is_inode_sus_path(inode)) {
 		iput(inode);
 		return true;
 	}
@@ -542,7 +542,7 @@ static bool compat_fillonedir(struct dir_context *ctx, const char *name,
 	if (!inode) {
 		goto orig_flow;
 	}
-	if (susfs_is_inode_sus_path(buf->idmap, inode)) {
+	if (susfs_is_inode_sus_path(inode)) {
 		iput(inode);
 		return true;
 	}
@@ -646,7 +646,7 @@ static bool compat_filldir(struct dir_context *ctx, const char *name, int namlen
 	if (!inode) {
 		goto orig_flow;
 	}
-	if (susfs_is_inode_sus_path(buf->idmap, inode)) {
+	if (susfs_is_inode_sus_path(inode)) {
 		iput(inode);
 		return true;
 	}

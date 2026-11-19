@@ -807,7 +807,11 @@ void br_multicast_del_pg(struct net_bridge_mdb_entry *mp,
 	struct hlist_node *tmp;
 
 	rcu_assign_pointer(*pp, pg->next);
-	hlist_del_init(&pg->mglist);
+	/*
+	 * Preserve the next pointer for teardown walkers
+	 * holding a reference to this list entry.
+	 */
+	hlist_del_init_rcu(&pg->mglist);
 	br_multicast_eht_clean_sets(pg);
 	hlist_for_each_entry_safe(ent, tmp, &pg->src_list, node)
 		br_multicast_del_group_src(ent, false);
@@ -833,6 +837,10 @@ static void br_multicast_find_del_pg(struct net_bridge *br,
 	struct net_bridge_port_group __rcu **pp;
 	struct net_bridge_mdb_entry *mp;
 	struct net_bridge_port_group *p;
+
+	/* Another teardown iteration may have removed it. */
+	if (hlist_unhashed(&pg->mglist))
+		return;
 
 	mp = br_mdb_ip_get(br, &pg->key.addr);
 	if (WARN_ON(!mp))

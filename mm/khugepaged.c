@@ -7,6 +7,7 @@
 #include <linux/sched/coredump.h>
 #include <linux/mmu_notifier.h>
 #include <linux/rmap.h>
+#include <linux/dax.h>
 #include <linux/swap.h>
 #include <linux/mm_inline.h>
 #include <linux/kthread.h>
@@ -1796,6 +1797,8 @@ static int collapse_file(struct mm_struct *mm, unsigned long addr,
 	result = alloc_charge_folio(&new_folio, mm, cc);
 	if (result != SCAN_SUCCEED)
 		goto out;
+
+	mapping_set_update(&xas, mapping);
 
 	__folio_set_locked(new_folio);
 	if (is_shmem)
