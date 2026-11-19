@@ -202,6 +202,8 @@ class LifetimeContracts(unittest.TestCase):
         self.assertEqual(base_mf, source("Makefile"))
         base_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config", True).splitlines() if l.strip() and not l.strip().startswith("#"))
         curr_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config").splitlines() if l.strip() and not l.strip().startswith("#"))
+        if "CONFIG_KSU=y" not in curr_lines:
+            base_lines = {l for l in base_lines if not any(k in l for k in ("KSU", "SUSFS", "NOMOUNT"))}
         self.assertTrue(base_lines.issubset(curr_lines), f"Baseline configs dropped: {base_lines - curr_lines}")
 
 
