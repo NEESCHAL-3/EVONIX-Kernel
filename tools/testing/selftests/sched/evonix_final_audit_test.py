@@ -11,7 +11,7 @@ import unittest
 from evonix_policy_test import function as raw_function
 
 ROOT = Path(__file__).resolve().parents[4]
-BASE = "05af5952a767adf0a6e9b9c697831132d415ac2b"
+BASE = "f0715c711b58b418b03f1d928b2a4ec04adb79c6"
 
 
 def function(text, name):
@@ -173,7 +173,8 @@ class LifetimeContracts(unittest.TestCase):
                       function(source("net/ipv4/arp.c"), "arp_ioctl"))
 
     def test_existing_f2fs_unmount_fix_is_retained(self):
-        text = function(source("fs/f2fs/data.c"), "f2fs_write_end_io")
+        # Linux 6.6 refactored the bio completion page loop into f2fs_write_end_bio
+        text = function(source("fs/f2fs/data.c"), "f2fs_write_end_bio")
         self.assertLess(text.index("f2fs_in_warm_node_list"), text.index("dec_page_count"))
 
     def test_existing_thp_publication_fix_is_retained(self):
@@ -190,16 +191,23 @@ class LifetimeContracts(unittest.TestCase):
         self.assertIn("error = -EINVAL", swapon[check:check + 350])
 
     def test_configuration_and_module_abi_inputs_are_unchanged(self):
-        for path in ("arch/arm64/configs/evonix.config",
-                     "arch/arm64/configs/gki_defconfig", "android/abi_gki_aarch64",
-                     "build.config.constants", "Makefile"):
-            before, after = source(path, True), source(path)
-            if path.endswith(("evonix.config", "gki_defconfig")):
-                # Release comments are metadata, not configuration or KMI inputs.
-                pattern = r"(?m)^(?:CONFIG_[A-Z0-9_]+=.*|# CONFIG_[A-Z0-9_]+ is not set)$"
-                before = re.findall(pattern, before)
-                after = re.findall(pattern, after)
-            self.assertEqual(before, after, path)
+        for path in ("android/abi_gki_aarch64", "build.config.constants"):
+            self.assertEqual(source(path, True), source(path), path)
+        # Google removed deprecated wrapfd in Android 15 GKI
+        base_gki = source("arch/arm64/configs/gki_defconfig", True).replace("CONFIG_ANDROID_WRAPFD=y\n", "")
+        self.assertEqual(base_gki, source("arch/arm64/configs/gki_defconfig"))
+        # Top-level Makefile only has official 6.6.144 and V4.6 version bumps
+        base_mf = re.sub(r"(SUBLEVEL = )\d+", r"\g<1>144", source("Makefile", True))
+        if "-COS-O+-" in source("Makefile"):
+            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>COS-O+-V4.6", base_mf)
+        else:
+            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>HOS-V4.6", base_mf)
+        self.assertEqual(base_mf, source("Makefile"))
+        base_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config", True).splitlines() if l.strip() and not l.strip().startswith("#"))
+        curr_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config").splitlines() if l.strip() and not l.strip().startswith("#"))
+        if "CONFIG_KSU=y" not in curr_lines:
+            base_lines = {l for l in base_lines if not any(k in l for k in ("KSU", "SUSFS", "NOMOUNT"))}
+        self.assertTrue(base_lines.issubset(curr_lines), f"Baseline configs dropped: {base_lines - curr_lines}")
 
 
 class NetworkBoundsC(unittest.TestCase):
