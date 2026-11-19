@@ -210,6 +210,17 @@ config CPU_FREQ_GOV_SCHEDUTIL
 
 	  If in doubt, say N.
 
+config EVONIX_SCHEDUTIL
+	bool "EVONIX Schedutil Adaptive Governor Engine"
+	depends on CPU_FREQ_GOV_SCHEDUTIL
+	default y
+	help
+	  Optimized schedutil governor engine designed for EVONIX kernel.
+	  Provides asymmetric dual-rate limiting (fast interactive up-ramp
+	  with stutter-preventing down-delay), workload-aware dynamic headroom
+	  (boosted response at low/mid loads, thermal-capped at high loads),
+	  and idle fast-downscaling.
+
 comment "CPU frequency scaling drivers"
 
 config CPUFREQ_DT
