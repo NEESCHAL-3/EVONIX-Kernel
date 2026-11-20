@@ -52,13 +52,6 @@ static LIST_HEAD(cpufreq_governor_list);
 
 static char default_governor[CPUFREQ_NAME_LEN];
 
-#ifdef CONFIG_EVONIX_GOVERNOR_ENFORCE
-static bool evonix_enforce_governor = false;
-module_param_named(evonix_enforce_governor, evonix_enforce_governor, bool, 0644);
-MODULE_PARM_DESC(evonix_enforce_governor,
-	"Enforce EVONIX schedutil as the active CPUFreq governor (1 = enforce, 0 = allow all; defaults to 0/unlocked)");
-#endif
-
 /*
  * The "cpufreq driver" - the arch- or hardware-dependent low
  * level driver of CPUFreq support, and its spinlock. This lock
@@ -857,17 +850,6 @@ static ssize_t store_scaling_governor(struct cpufreq_policy *policy,
 		if (!new_gov)
 			return -EINVAL;
 
-#ifdef CONFIG_EVONIX_GOVERNOR_ENFORCE
-		if (READ_ONCE(evonix_enforce_governor)) {
-			if (strncmp(new_gov->name, "schedutil", CPUFREQ_NAME_LEN) != 0) {
-				pr_warn_ratelimited("evonix: rejected governor switch to '%s' on cpu %d (EVONIX Schedutil enforced)\n",
-						    new_gov->name, policy->cpu);
-				module_put(new_gov->owner);
-				return -EPERM;
-			}
-		}
-#endif
-
 		ret = cpufreq_set_policy(policy, new_gov,
 					 CPUFREQ_POLICY_UNKNOWN);
 
@@ -1142,11 +1124,6 @@ static int cpufreq_init_policy(struct cpufreq_policy *policy)
 
 	if (has_target()) {
 		/* Update policy governor to the one used before hotplug. */
-#ifdef CONFIG_EVONIX_GOVERNOR_ENFORCE
-		if (READ_ONCE(evonix_enforce_governor))
-			gov = get_governor("schedutil");
-		else
-#endif
 		gov = get_governor(policy->last_governor);
 		if (gov) {
 			pr_debug("Restoring governor %s for cpu %d\n",
