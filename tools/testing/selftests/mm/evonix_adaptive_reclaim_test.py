@@ -58,5 +58,17 @@ class EvonixAdaptiveReclaimTest(unittest.TestCase):
     def test_stock_watermark_boost_factor_intact(self):
         self.assertIn("static int watermark_boost_factor __read_mostly = 15000;", self.page_alloc_c)
 
+    def test_suspend_pm_notifier_registered(self):
+        self.assertIn("register_pm_notifier(&evonix_mm_pm_nb);", self.evonix_mm_c)
+        self.assertIn("cancel_delayed_work_sync(&evonix_reclaim_dwork);", self.evonix_mm_c)
+
+    def test_freezable_workqueue_used(self):
+        self.assertIn("system_freezable_power_efficient_wq", self.evonix_mm_c)
+        self.assertNotIn("system_power_efficient_wq,", self.evonix_mm_c)
+
+    def test_adaptive_intervals_and_rate_limiting(self):
+        self.assertIn("needed_reclaim ? 1000 : 3000", self.evonix_mm_c)
+        self.assertIn("last_kswapd_wakeup_jiffies + HZ", self.evonix_mm_c)
+
 if __name__ == "__main__":
     unittest.main()
