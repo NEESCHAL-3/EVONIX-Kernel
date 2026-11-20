@@ -43,6 +43,15 @@ class EvonixIoPrioTest(unittest.TestCase):
         # prio_queue dispatch must strictly prioritize queue 0 over queue 1
         self.assertIn("!(pq_state & 1)", self.adios_c)
 
+    def test_memory_barriers_present(self):
+        # smp_wmb in set_adios_state and smp_rmb in dispatch_from_pq
+        self.assertIn("smp_wmb();", self.adios_c)
+        self.assertIn("smp_rmb();", self.adios_c)
+
+    def test_anti_starvation_quota_present(self):
+        self.assertIn("pq1_dispatch_count", self.adios_c)
+        self.assertIn("pq1_dispatch_count) >= 8", self.adios_c)
+
     def test_simulated_dispatch_order(self):
         # bit 0 = queue 0 (Tier-0 head), bit 1 = queue 1 (Tier-1 sync read)
         def get_pq_idx(state):
@@ -54,6 +63,25 @@ class EvonixIoPrioTest(unittest.TestCase):
         self.assertEqual(get_pq_idx(0b10), 1)
         # Only Tier-0 present: queue 0 served
         self.assertEqual(get_pq_idx(0b01), 0)
+
+    def test_simulated_anti_starvation(self):
+        # Simulate 12 consecutive Tier-1 requests with pending normal work
+        pq1_count = 0
+        dispatched_tier1 = 0
+        dispatched_normal = 0
+        normal_pending = True
+
+        for req in range(12):
+            if pq1_count >= 8 and normal_pending:
+                # Yield to normal queue
+                dispatched_normal += 1
+                pq1_count = 0 # reset by normal dispatch
+            else:
+                dispatched_tier1 += 1
+                pq1_count += 1
+
+        self.assertEqual(dispatched_tier1, 11)
+        self.assertEqual(dispatched_normal, 1) # Yielded exactly at request 8!
 
 if __name__ == "__main__":
     unittest.main()
