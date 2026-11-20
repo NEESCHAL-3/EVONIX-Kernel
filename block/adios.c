@@ -261,6 +261,10 @@ struct adios_data {
 	u8  elv_direction;
 	sector_t head_pos;
 
+#ifdef CONFIG_EVONIX_IO_PRIO
+	u32 pq1_dispatch_count;
+#endif
+
 	bool bq_page;
 	struct list_head batch_queue[ADIOS_BQ_PAGES][ADIOS_OPTYPES];
 	u32 batch_count[ADIOS_BQ_PAGES][ADIOS_OPTYPES];
@@ -699,10 +703,12 @@ static inline struct adios_rq_data *get_rq_data(struct request *rq) {
 
 static inline
 void set_adios_state(struct adios_data *ad, u32 shift, u32 idx, bool flag) {
-	if (flag)
+	if (flag) {
+		smp_wmb();
 		atomic_or(1U << (idx + shift), &ad->state);
-	else
+	} else {
 		atomic_andnot(1U << (idx + shift), &ad->state);
+	}
 }
 
 static inline u32 get_adios_state(struct adios_data *ad)
@@ -945,9 +951,10 @@ static void insert_request_post_stability(struct blk_mq_hw_ctx *hctx,
 	/* Tier-1: EVONIX Foreground Read Prioritization & Latency Guard
 	 * Expedite synchronous reads from interactive / RT foreground tasks through prio_queue[1]
 	 * to guarantee bounded latency during heavy multi-queue writeback congestion.
+	 * Context-safe: inspects request-carried flags and IOPRIO rather than task context.
 	 */
 	if ((rq->cmd_flags & REQ_SYNC) && (rq_data_dir(rq) == READ) &&
-	    ((rq->cmd_flags & REQ_PRIO) ||
+	    ((rq->cmd_flags & (REQ_PRIO | REQ_META)) ||
 	     (IOPRIO_PRIO_CLASS(req_get_ioprio(rq)) == IOPRIO_CLASS_RT) ||
 	     (IOPRIO_PRIO_CLASS(req_get_ioprio(rq)) == IOPRIO_CLASS_BE &&
 	      IOPRIO_PRIO_DATA(req_get_ioprio(rq)) <= 2))) {
@@ -1289,9 +1296,26 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 	struct request *rq = NULL;
 	u32 pq_state;
 
-	/* Lockless check: bypass spinlock if no priority requests are queued */
+	/* Lockless check: probe priority state with acquire barrier */
 	if (!eval_adios_state(ad, ADIOS_STATE_PQ))
 		return NULL;
+
+	smp_rmb();
+
+#ifdef CONFIG_EVONIX_IO_PRIO
+	/* Anti-starvation guard: if sustained Tier-1 foreground reads have dispatched
+	 * for >= 8 consecutive requests, and normal queues (batch queue / deadline tree)
+	 * have pending work, yield to prevent normal I/O starvation.
+	 * Tier-0 (emergency head requests) is strictly exempt from this quota.
+	 */
+	if (READ_ONCE(ad->pq1_dispatch_count) >= 8) {
+		u32 normal_state = eval_adios_state(ad, ADIOS_STATE_BQ | ADIOS_STATE_DL);
+		if (normal_state) {
+			/* Yield to normal queues */
+			return NULL;
+		}
+	}
+#endif
 
 	guard(spinlock_irqsave)(&ad->pq_lock);
 	pq_state = eval_adios_state(ad, ADIOS_STATE_PQ);
@@ -1309,6 +1333,14 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 		set_adios_state(ad, ADIOS_STATE_PQ, pq_idx, false);
 		update_elv_direction(ad);
 	}
+
+#ifdef CONFIG_EVONIX_IO_PRIO
+	if (pq_idx == 1)
+		ad->pq1_dispatch_count++;
+	else
+		ad->pq1_dispatch_count = 0;
+#endif
+
 	return rq;
 }
 
@@ -1323,8 +1355,12 @@ static struct request *adios_dispatch_request(struct blk_mq_hw_ctx *hctx) {
 		goto found;
 
 	rq = dispatch_from_bq(ad);
-	if (rq)
+	if (rq) {
+#ifdef CONFIG_EVONIX_IO_PRIO
+		ad->pq1_dispatch_count = 0;
+#endif
 		goto found;
+	}
 
 	return NULL;
 found:
