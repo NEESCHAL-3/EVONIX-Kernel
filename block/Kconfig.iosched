@@ -30,6 +30,16 @@ config MQ_IOSCHED_DEFAULT_ADIOS
 	help
 	  Enable the ADIOS I/O scheduler as the default scheduler for MQ I/O.
 
+config EVONIX_IO_PRIO
+	bool "EVONIX Foreground I/O Latency Guard for ADIOS"
+	depends on MQ_IOSCHED_ADIOS
+	default y
+	help
+	  Enables expedited dispatch of foreground synchronous reads in the
+	  ADIOS I/O scheduler via priority tier-1. Protects interactive UI frame
+	  loads and app startup from writeback stall latency under heavy UFS
+	  I/O queue depth.
+
 config IOSCHED_BFQ
 	tristate "BFQ I/O scheduler"
 	select BLK_ICQ

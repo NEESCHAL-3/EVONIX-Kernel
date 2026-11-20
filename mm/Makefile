@@ -147,3 +147,4 @@ obj-$(CONFIG_HAVE_BOOTMEM_INFO_NODE) += bootmem_info.o
 obj-$(CONFIG_GENERIC_IOREMAP) += ioremap.o
 obj-$(CONFIG_SHRINKER_DEBUG) += shrinker_debug.o
 obj-y += oplus_mm/
+obj-$(CONFIG_EVONIX_MM_ADAPTIVE) += evonix_mm.o
