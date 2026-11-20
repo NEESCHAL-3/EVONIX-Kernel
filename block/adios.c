@@ -1983,7 +1983,11 @@ static void __exit adios_exit(void) {
 	elv_unregister(&mq_adios);
 }
 
+#ifdef MODULE
 module_init(adios_init);
+#else
+subsys_initcall(adios_init);
+#endif
 module_exit(adios_exit);
 
 MODULE_AUTHOR(ADIOS_AUTHOR);
