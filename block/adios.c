@@ -1517,7 +1517,7 @@ static int adios_init_sched(struct request_queue *q, struct elevator_type *e) {
 
 	eq->elevator_data = ad;
 
-	ad->is_rotational = !!(q->limits.features & BLK_FEAT_ROTATIONAL);
+	ad->is_rotational = !blk_queue_nonrot(q);
 	ad->global_latency_window = (ad->is_rotational)?
 		default_global_latency_window_rotational:
 		default_global_latency_window;
