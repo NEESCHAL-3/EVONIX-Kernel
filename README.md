@@ -25,12 +25,12 @@ For detailed changes, see the [changelog](CHANGELOG.md).
 
 | ROM | Edition | Source branch |
 | --- | --- | --- |
-| HyperOS | KernelSU-Next + SUSFS + NoMount | [`hyperos/ksu-susfs`](../../tree/hyperos/ksu-susfs) |
-| HyperOS | BakaSU + SUSFS + NoMount | [`bakasu/hyperos-susfs`](../../tree/bakasu/hyperos-susfs) |
-| HyperOS | Normal (rootless) | [`hyperos/normal`](../../tree/hyperos/normal) |
-| ColorOS | KernelSU-Next + SUSFS + NoMount | [`coloros/ksu-susfs`](../../tree/coloros/ksu-susfs) |
-| ColorOS | BakaSU + SUSFS + NoMount | [`bakasu/coloros-susfs`](../../tree/bakasu/coloros-susfs) |
-| ColorOS | Normal (rootless) | [`coloros/normal`](../../tree/coloros/normal) |
+| HyperOS | KernelSU-Next + SUSFS + NoMount | [`hyperos/ksu-susfs`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/hyperos/ksu-susfs) |
+| HyperOS | BakaSU + SUSFS + NoMount | [`bakasu/hyperos-susfs`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/bakasu/hyperos-susfs) |
+| HyperOS | Normal (rootless) | [`hyperos/normal`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/hyperos/normal) |
+| ColorOS | KernelSU-Next + SUSFS + NoMount | [`coloros/ksu-susfs`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/coloros/ksu-susfs) |
+| ColorOS | BakaSU + SUSFS + NoMount | [`bakasu/coloros-susfs`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/bakasu/coloros-susfs) |
+| ColorOS | Normal (rootless) | [`coloros/normal`](https://github.com/NEESCHAL-3/EVONIX-Kernel/tree/coloros/normal) |
 
 Select the package that matches your installed ROM and desired root configuration.
 
