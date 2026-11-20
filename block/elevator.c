@@ -571,7 +571,7 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 {
 	struct elevator_type *e;
 
-#if IS_ENABLED(CONFIG_MQ_IOSCHED_DEFAULT_ADIOS) || IS_ENABLED(CONFIG_MQ_IOSCHED_ADIOS)
+#if IS_ENABLED(CONFIG_MQ_IOSCHED_DEFAULT_ADIOS)
 	/*
 	 * EVONIX: Make ADIOS the default I/O scheduler for all eligible blk-mq
 	 * storage queues (including all Rodin UFS logical units / MCQ).
