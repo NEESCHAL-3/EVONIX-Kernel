@@ -53,10 +53,10 @@ static LIST_HEAD(cpufreq_governor_list);
 static char default_governor[CPUFREQ_NAME_LEN];
 
 #ifdef CONFIG_EVONIX_GOVERNOR_ENFORCE
-static bool evonix_enforce_governor = true;
+static bool evonix_enforce_governor = false;
 module_param_named(evonix_enforce_governor, evonix_enforce_governor, bool, 0644);
 MODULE_PARM_DESC(evonix_enforce_governor,
-	"Enforce EVONIX schedutil as the active CPUFreq governor (1 = enforce, 0 = allow all)");
+	"Enforce EVONIX schedutil as the active CPUFreq governor (1 = enforce, 0 = allow all; defaults to 0/unlocked)");
 #endif
 
 /*
