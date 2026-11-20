@@ -232,7 +232,9 @@ config EVONIX_GOVERNOR_ENFORCE
 	  QoS, and interconnect voting.
 
 	  Provides /sys/module/cpufreq/parameters/evonix_enforce_governor to
-	  reversibly disable or enable enforcement at runtime (1 = enforce, 0 = allow).
+	  dynamically enable or disable enforcement at runtime (1 = enforce, 0 = allow all).
+	  Defaults to 0 (unlocked) to grant root users and power hal full flexibility,
+	  while EVONIX Schedutil remains the default governor selected at boot.
 
 comment "CPU frequency scaling drivers"
 

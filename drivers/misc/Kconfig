@@ -597,4 +597,12 @@ source "drivers/misc/uacce/Kconfig"
 source "drivers/misc/pvpanic/Kconfig"
 source "drivers/misc/mchp_pci1xxxx/Kconfig"
 source "drivers/misc/evonix_cos/Kconfig"
+config NTSYNC
+	tristate "NT synchronization primitive emulation"
+	help
+	  This module provides support for NT synchronization primitives
+	  (mutexes, semaphores, and events) via the /dev/ntsync character device.
+	  It is primarily useful for Wine/Proton to emulate NT sync objects
+	  with native kernel performance.
+
 endmenu
