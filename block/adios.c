@@ -1271,9 +1271,17 @@ static struct request *dispatch_from_bq(struct adios_data *ad) {
 // Dispatch a request from the priority queue
 static struct request *dispatch_from_pq(struct adios_data *ad) {
 	struct request *rq = NULL;
+	u32 pq_state;
+
+	/* Lockless check: bypass spinlock if no priority requests are queued */
+	if (!eval_adios_state(ad, ADIOS_STATE_PQ))
+		return NULL;
 
 	guard(spinlock_irqsave)(&ad->pq_lock);
-	u32 pq_state = eval_adios_state(ad, ADIOS_STATE_PQ);
+	pq_state = eval_adios_state(ad, ADIOS_STATE_PQ);
+	if (!pq_state)
+		return NULL;
+
 	u8  pq_idx = pq_state >> 1;
 	struct list_head *q = &ad->prio_queue[pq_idx];
 
