@@ -571,6 +571,16 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 {
 	struct elevator_type *e;
 
+#if IS_ENABLED(CONFIG_MQ_IOSCHED_DEFAULT_ADIOS) || IS_ENABLED(CONFIG_MQ_IOSCHED_ADIOS)
+	/*
+	 * EVONIX: Make ADIOS the default I/O scheduler for all eligible blk-mq
+	 * storage queues (including all Rodin UFS logical units / MCQ).
+	 */
+	e = elevator_find_get(q, "adios");
+	if (e)
+		return e;
+#endif
+
 	/*
 	 * An explicit device-driver preference takes priority over the generic
 	 * no-scheduler-by-default policy. If Kyber is unavailable, continue
@@ -654,9 +664,30 @@ void elevator_init_mq(struct request_queue *q)
 
 	err = blk_mq_init_sched(q, e);
 
+	if (err && !strcmp(e->elevator_name, "adios")) {
+		struct elevator_type *fallback = NULL;
+
+		pr_warn("EVONIX: \"adios\" elevator initialization failed (%d), attempting fallback\n",
+			err);
+
+		if (test_bit(QUEUE_FLAG_PREFER_KYBER, &q->queue_flags))
+			fallback = elevator_find_get(q, "kyber");
+		else if (!(q->tag_set->flags & BLK_MQ_F_NO_SCHED_BY_DEFAULT) &&
+			 (q->nr_hw_queues == 1 || blk_mq_is_shared_tags(q->tag_set->flags)))
+			fallback = elevator_find_get(q, "mq-deadline");
+
+		if (fallback) {
+			err = blk_mq_init_sched(q, fallback);
+			if (err)
+				pr_warn("\"%s\" fallback elevator initialization failed, falling back to \"none\"\n",
+					fallback->elevator_name);
+			elevator_put(fallback);
+		}
+	}
+
 	blk_mq_unfreeze_queue(q);
 
-	if (err) {
+	if (err && strcmp(e->elevator_name, "adios")) {
 		pr_warn("\"%s\" elevator initialization failed, "
 			"falling back to \"none\"\n", e->elevator_name);
 	}
