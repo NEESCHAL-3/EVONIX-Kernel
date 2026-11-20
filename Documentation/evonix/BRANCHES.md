@@ -17,15 +17,15 @@ The default repository branch is `hyperos/ksu-susfs`. Shared core improvements a
 
 ## Release provenance
 
-The `v4.6` tag identifies the official EVONIX Kernel V4.6 release. Each flashable AnyKernel3 ZIP is built from its corresponding release commit:
+The `v4.6` tag identifies the official EVONIX Kernel V4.6 release. Each flashable AnyKernel3 ZIP corresponds to its compiled release commit:
 
-| ZIP edition | Compiled source commit | Release SHA-256 |
+| ZIP edition | Compiled source commit | Release Archive |
 | --- | --- | --- |
-| HyperOS KernelSU Next + SUSFS | `8fabe278170b5` | `41993353f8cd32be283e07e5f1201d693f3f999e64b33446af682637f3f776f8` |
-| HyperOS BakaSU + SUSFS | `b324ec6f40983` | `69f22d70923b3a53ec37b8eea3af0d2fe4789dcccf5334df4ab407b241989fbf` |
-| HyperOS Normal | `b8c2acc398b07` | `eb8fef695047218fd772eb60e5198a87b3e7bac5c4109bb00378a8494ebda458` |
-| ColorOS KernelSU Next + SUSFS | `8473f2064f962` | `ec111826ce51663b147491cb5645d641d20392166ba90b67f78bd2dc10d38242` |
-| ColorOS BakaSU + SUSFS | `806c240d45b75` | `5ed75d0e3a362dae6759d2d4bad5b5ae7ac78fb9792cd92a7d9bb63fb4a7d26e` |
-| ColorOS Normal | `a17a9bb153581` | `428ea74e899f3e6634b3f89e8ae3b0a3e9e48562613f9fca39eba27bc328295e` |
+| HyperOS KernelSU Next + SUSFS | `8fabe278170b5` | `EVONIX-V4.6-HyperOS-KSU-SUSFS-rodin.zip` |
+| HyperOS BakaSU + SUSFS | `b324ec6f40983` | `EVONIX-V4.6-HyperOS-BakaSU-SUSFS-rodin.zip` |
+| HyperOS Normal | `b8c2acc398b07` | `EVONIX-V4.6-HyperOS-Normal-rodin.zip` |
+| ColorOS KernelSU Next + SUSFS | `8473f2064f962` | `EVONIX-V4.6-ColorOS-KSU-SUSFS-rodin.zip` |
+| ColorOS BakaSU + SUSFS | `806c240d45b75` | `EVONIX-V4.6-ColorOS-BakaSU-SUSFS-rodin.zip` |
+| ColorOS Normal | `a17a9bb153581` | `EVONIX-V4.6-ColorOS-Normal-rodin.zip` |
 
 Release-documentation commits advance branch HEADs but do not change compiled kernel sources or binary integrity. Historical `v4.0` and `v4.5` tags remain immutable.
