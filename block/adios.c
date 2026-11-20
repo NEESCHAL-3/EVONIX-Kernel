@@ -20,6 +20,7 @@
 #include <linux/string.h>
 #include <linux/list_sort.h>
 #include <linux/rcupdate.h>
+#include <linux/ioprio.h>
 
 #include "elevator.h"
 #include "blk.h"
@@ -940,6 +941,21 @@ static void insert_request_post_stability(struct blk_mq_hw_ctx *hctx,
 		return;
 	}
 
+#ifdef CONFIG_EVONIX_IO_PRIO
+	/* Tier-1: EVONIX Foreground Read Prioritization & Latency Guard
+	 * Expedite synchronous reads from interactive / RT foreground tasks through prio_queue[1]
+	 * to guarantee bounded latency during heavy multi-queue writeback congestion.
+	 */
+	if ((rq->cmd_flags & REQ_SYNC) && (rq_data_dir(rq) == READ) &&
+	    ((rq->cmd_flags & REQ_PRIO) ||
+	     (IOPRIO_PRIO_CLASS(req_get_ioprio(rq)) == IOPRIO_CLASS_RT) ||
+	     (IOPRIO_PRIO_CLASS(req_get_ioprio(rq)) == IOPRIO_CLASS_BE &&
+	      IOPRIO_PRIO_DATA(req_get_ioprio(rq)) <= 2))) {
+		insert_to_prio_queue(ad, rq, 1);
+		return;
+	}
+#endif
+
 	if (merge_or_insert_to_dl_tree(ad, rq, q, free))
 		return;
 }
@@ -1282,7 +1298,7 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 	if (!pq_state)
 		return NULL;
 
-	u8  pq_idx = pq_state >> 1;
+	u8  pq_idx = !(pq_state & 1);
 	struct list_head *q = &ad->prio_queue[pq_idx];
 
 	if (unlikely(list_empty(q))) return NULL;
