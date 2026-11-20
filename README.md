@@ -1,56 +1,60 @@
 # EVONIX Kernel
 
-EVONIX is an Android GKI-based kernel for the **POCO X7 Pro / Redmi Turbo 4 (rodin)**, maintained by **NEESCHAL**. It provides separate HyperOS and ColorOS builds with rooted and rootless editions.
+EVONIX is a custom Android kernel for the **POCO X7 Pro / Redmi Turbo 4 (rodin)**, built on Android GKI with dedicated **HyperOS** and **ColorOS** editions.
 
-| | |
+| Specification | Details |
 | --- | --- |
-| Current series | V4.6 |
-| Kernel | Linux 6.6.144 |
-| Platform | MediaTek Dimensity 8400-Ultra (MT6899), 8× Cortex-A725 |
-| Toolchain | Android Clang r614150 (23.0.1), ThinLTO, AutoFDO |
+| Device | POCO X7 Pro / Redmi Turbo 4 (`rodin`) |
+| Processor | MediaTek Dimensity 8400-Ultra (MT6899) |
+| CPU architecture | 8× Arm Cortex-A725 |
+| Kernel base | Linux 6.6 / Android GKI |
+| Toolchain | Android Clang r614150, ThinLTO, AutoFDO |
 
 ## Features
 
-- **CPU and scheduling:** EVONIX Enhanced Schedutil, configurable UI responsiveness, EEVDF and EAS improvements.
-- **Storage:** ADIOS v3.3.0, foreground read prioritization and selected F2FS reliability fixes.
-- **Memory:** Adaptive reclaim, suspend-aware background work and existing MGLRU improvements.
-- **Compatibility:** NTSync, Linux container prerequisites, BBRv3 and additional network queue disciplines and filtering options.
-- **Device integration:** Existing charging-bypass support, Baseband-guard and ROM-specific MediaTek/OPlus integrations.
-- **Root options:** KernelSU-Next or BakaSU with SUSFS and NoMount, alongside separate builds without built-in root.
+- **CPU and scheduling:** EVONIX Enhanced Schedutil, EEVDF and EAS tuning, and configurable UI responsiveness.
+- **Storage:** ADIOS I/O scheduler, foreground read prioritization and F2FS reliability improvements.
+- **Memory:** Adaptive memory reclaim and improved memory-management behavior.
+- **Compatibility:** NTSync, Linux container prerequisites and expanded networking support.
+- **Device integration:** HyperOS and ColorOS platform support, including existing charging-bypass functionality.
+- **Root options:** KernelSU-Next and BakaSU editions with SUSFS and NoMount, plus editions without built-in root.
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and detailed changes.
+For detailed changes, see the [changelog](CHANGELOG.md).
 
 ## Editions
 
-| ROM | Edition | Branch |
+| ROM | Edition | Source branch |
 | --- | --- | --- |
-| HyperOS | KernelSU-Next + SUSFS + NoMount | `hyperos/ksu-susfs` |
-| HyperOS | BakaSU + SUSFS + NoMount | `bakasu/hyperos-susfs` |
-| HyperOS | Normal (no built-in root) | `hyperos/normal` |
-| ColorOS | KernelSU-Next + SUSFS + NoMount | `coloros/ksu-susfs` |
-| ColorOS | BakaSU + SUSFS + NoMount | `bakasu/coloros-susfs` |
-| ColorOS | Normal (no built-in root) | `coloros/normal` |
+| HyperOS | KernelSU-Next + SUSFS + NoMount | [`hyperos/ksu-susfs`](../../tree/hyperos/ksu-susfs) |
+| HyperOS | BakaSU + SUSFS + NoMount | [`bakasu/hyperos-susfs`](../../tree/bakasu/hyperos-susfs) |
+| HyperOS | Normal (rootless) | [`hyperos/normal`](../../tree/hyperos/normal) |
+| ColorOS | KernelSU-Next + SUSFS + NoMount | [`coloros/ksu-susfs`](../../tree/coloros/ksu-susfs) |
+| ColorOS | BakaSU + SUSFS + NoMount | [`bakasu/coloros-susfs`](../../tree/bakasu/coloros-susfs) |
+| ColorOS | Normal (rootless) | [`coloros/normal`](../../tree/coloros/normal) |
 
-Choose a build matching your installed ROM and preferred root configuration. The permissive development branch is not part of the six-edition release.
+Select the package that matches your installed ROM and desired root configuration.
 
-## Downloads and installation
+## Downloads
 
-Published builds are available under [GitHub Releases](https://github.com/NEESCHAL-3/EVONIX-Kernel/releases).
+Download published kernel packages from [GitHub Releases](https://github.com/NEESCHAL-3/EVONIX-Kernel/releases).
 
-Before installing, back up your known-working boot image, verify the release ZIP checksum and confirm a recovery path. Use a compatible AnyKernel installer or custom recovery; do not install the ZIP as a root module or flash a package intended for another ROM.
+Before flashing, verify the release checksum and keep a known-working boot backup. Follow the [installation guide](Documentation/evonix/INSTALLATION.md) for supported flashing methods.
 
-See the [installation guide](Documentation/evonix/INSTALLATION.md) and the release-specific notes for compatibility details.
+## Building from source
 
-## Building
+This repository contains the kernel source used within an Android Kleaf/Bazel workspace.
 
-This repository contains the kernel `common/` source tree for an Android Kleaf/Bazel workspace; it is not a standalone build environment. Build with the documented toolchain and configuration, then verify the kernel image, embedded configuration and KMI results.
+- [Build instructions](Documentation/evonix/BUILDING.md)
+- [Branch information](Documentation/evonix/BRANCHES.md)
+- [Architecture and integration](Documentation/evonix/ARCHITECTURE.md)
 
-See [building instructions](Documentation/evonix/BUILDING.md) and [branch policy](Documentation/evonix/BRANCHES.md).
+## Documentation
 
-## Validation and security
+- [Changelog](CHANGELOG.md)
+- [Bypass charging](Documentation/evonix/BYPASS_CHARGING.md)
+- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
 
-All six V4.6 editions have reported successful host builds and KMI checks. Physical boot and selected runtime checks have been reported for the **HyperOS BakaSU** edition; the other editions have not been individually boot-tested in the supplied release evidence.
-
-Feature availability does not establish a measured increase in FPS, battery life or thermal efficiency. Consult [SECURITY.md](SECURITY.md) for inherited security and vendor-compatibility limitations.
+## License
 
 Licensed under GPL-2.0. See [COPYING](COPYING).
