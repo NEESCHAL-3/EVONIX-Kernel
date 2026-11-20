@@ -6,113 +6,103 @@ This release is published across six dedicated editions: HyperOS KernelSU-Next, 
 
 ### Linux 6.6 stable updates and Android GKI
 
-- Upgraded the kernel base to Linux 6.6.144 LTS Android GKI.
-- Backported MediaTek OPP (Operating Performance Points) and Energy Model stability fixes from upstream Linux, eliminating memory leaks during multi-regulator supply parsing, preventing integer overflow in high-frequency table calculation, and resolving race conditions during concurrent OPP dynamic additions.
-- Integrated upstream EEVDF and deadline priority-inheritance (PI) fixes, resolving task reference leaks during deadline migrations and preventing priority-inversion starvation under nested mutex contention.
-- Integrated memory hotplug synchronization and race-condition hardening for deferred struct page initialization.
-- Backported Google Android 15 GKI common kernel updates while maintaining full KMI symbol compatibility.
+- **Kernel Base Upgrade:** Upgraded the kernel base from Linux 6.6.139 to Linux 6.6.144 LTS Android GKI.
+- **MediaTek OPP Stability:** Backported upstream fixes for Operating Performance Points and Energy Model parsing, eliminating multi-regulator supply leaks, preventing integer overflow during high-frequency table calculation, and locking down dynamic OPP addition races.
+- **EEVDF and Priority Inheritance:** Resolved struct task_struct reference leaks during deadline task migration, corrected cross-affinity priority inheritance, and eliminated starvation under nested mutex contention.
+- **Memory Hotplug Hardening:** Synchronized deferred struct page initialization paths to eliminate initialization race conditions.
+- **Android 15 GKI Backports:** Integrated common Android 15 GKI stability updates while maintaining 100% symbol and structure KMI compatibility.
 
 ### CPU scheduling, EEVDF and Enhanced Schedutil
 
-- Implemented EVONIX Enhanced Schedutil with decoupled asymmetric rate-limiting: 1000 µs ramp-up for immediate frequency response during frame drops, and 4000 µs ramp-down to prevent premature down-clocking during active workloads.
-- Implemented a continuous piecewise-linear dynamic frequency headroom curve (+35% at low utilization tapering to +10% near saturation), delivering burst headroom before frame deadlines.
-- Corrected CPU governor boot default selection by intercepting MediaTek vendor init's boot-time sysfs write, ensuring Schedutil is enforced as the system default across all CPU policies without requiring userspace helper scripts.
-- Restored complete CPU governor freedom for root users, removing unconditional governor locking while preserving user ability to select performance, powersave, conservative, or custom frequency bounds.
-- Refactored MediaTek cluster topology configuration to reflect the true all-big-core architecture of the Dimensity 8400-Ultra (8x Cortex-A725 across 3 performance gear groups: 1x 3.25 GHz Prime, 3x 3.0 GHz Gold, 4x 2.0 GHz Silver).
-- Tuned EEVDF base scheduling slice to 500 µs normalized base (2.0 ms scaled across 8 cores), providing balanced interactive responsiveness and throughput.
+- **Decoupled Asymmetric Rate Limiting:** Implemented 1000 µs ramp-up (up_rate_limit_us=1000) for instantaneous frame-drop recovery alongside 4000 µs ramp-down (down_rate_limit_us=4000) to prevent premature frequency drops during active workloads.
+- **EVONIX Dynamic Headroom Curve:** Implemented a continuous piecewise-linear frequency headroom curve (+35% at light load tapering smoothly to +10% near saturation), granting interactive tasks burst headroom before frame deadlines.
+- **Automatic Schedutil Boot Enforcement:** Intercepted MediaTek vendor init's boot-time sysfs write, guaranteeing Schedutil is enforced as the active system default across all CPU policies without userspace helper scripts.
+- **Complete CPU Governor Freedom:** Eliminated unconditional governor locking, allowing root users full freedom to select performance, powersave, conservative, or customize policy frequency bounds.
+- **Hardware-Aware Core Topology:** Refactored MediaTek cluster topology configuration to accurately model Rodin's All-Big-Core architecture (8x Cortex-A725 across 3 performance gear groups).
+- **EEVDF Slice Optimization:** Tuned normalized base scheduling slice to 500 µs (2.0 ms scaled across 8 cores), providing balanced interactive responsiveness and throughput.
 
 ### EVONIX UI Responsiveness Engine
 
-- Introduced kernel-level UI Responsiveness Engine (CONFIG_EVONIX_SCHED_RESPONSIVE).
-- Automatically identifies latency-critical user-interface threads (SurfaceFlinger, RenderThread, SystemUI, and foreground application compositor threads) and applies an immediate 20% frequency headroom boost (ui_boost_pct=20).
-- Provides instantaneous frame rendering acceleration during touch events and gestures while respecting thermal governor ceilings.
-- Fully integrated with platform EAS energy models without inducing unnecessary thermal throttling.
+- **Kernel-Level UI Detection (CONFIG_EVONIX_SCHED_RESPONSIVE):** Automatically detects latency-critical user interface threads, including SurfaceFlinger, RenderThread, SystemUI, and foreground application compositor threads.
+- **Immediate Headroom Boost:** Applies an instant 20% frequency headroom boost (ui_boost_pct=20) to active UI threads during touch events and frame dispatch.
+- **Thermal Coordination:** Coordinates with platform Energy-Aware Scheduling (EAS) while respecting hardware thermal governor limits.
 
 ### ADIOS I/O scheduler and Foreground Read Prioritization
 
-- Integrated ADIOS v3.3.0 (Adaptive Dynamic I/O Scheduler) blk-mq scheduler and made it the default I/O scheduler across all compatible block storage queues, including Rodin's UFS 4.0 Multi-Circular Queues (MCQ).
-- Introduced EVONIX Foreground Read Prioritization (CONFIG_EVONIX_IO_PRIO) with dedicated Tier-1 queue handling for synchronous reads initiated by foreground UI tasks, drastically reducing app cold-start times and UI stalls during background writeback.
-- Hardened ADIOS against dispatch lock contention across hardware queues using lockless queue state checks.
-- Eliminated priority inversion and starvation by implementing request-depth tracking and anti-starvation throttling after 8 consecutive dispatches, with strict exemptions for emergency head requests.
-- Enforced cross-core memory ordering and cache coherency with explicit memory barriers (smp_mb__after_atomic).
-- Added robust multi-tier fallback: if a storage controller does not support ADIOS, the block layer gracefully falls back to Kyber, mq-deadline, or none without kernel warnings or panics.
+- **Universal Default Selection (CONFIG_IOSCHED_ADIOS):** ADIOS v3.3.0 is configured as the default I/O scheduler across all compatible blk-mq storage devices, including UFS 4.0 Multi-Circular Queues (MCQ).
+- **EVONIX Foreground Read Prioritization (CONFIG_EVONIX_IO_PRIO):** Synchronous read requests from interactive UI tasks receive Tier-1 queue priority, substantially reducing application cold-start times and UI stalls during background writeback.
+- **Lockless State Evaluation:** Eliminates dispatch lock contention across hardware queues using lockless queue state checks.
+- **Anti-Starvation Hardening:** Enforces request-depth tracking and throttles lower-priority queues after 8 consecutive dispatches, with strict exemptions for emergency head requests.
+- **Memory Coherency:** Enforces cross-core cache coherency and atomic visibility with explicit memory barriers (smp_mb__after_atomic).
+- **Graceful Multi-Tier Fallback:** If a controller cannot bind to ADIOS, the block layer automatically falls back to Kyber, mq-deadline, or none without kernel panics.
 
 ### Filesystem integrity and F2FS fixes
 
-- Backported 12 critical upstream F2FS integrity and garbage-collection (GC) fixes.
-- Hardened atomic write handling to eliminate filesystem corruption during sudden power-off or kernel crash scenarios.
-- Fixed checkpoint serialization races and background GC victim selection under high storage fill ratios.
-- Resolved block-allocation race conditions in multi-threaded asynchronous I/O paths.
-- Addressed stale inode writeback metadata leaks and improved fsync flush latency.
+- **Upstream F2FS Fixes:** Backported 12 upstream integrity and garbage-collection (GC) patches.
+- **Crash-Safe Atomic Writes:** Hardened atomic write handling to prevent data corruption during sudden kernel panic or abrupt power loss.
+- **Serialization and GC Stability:** Resolved checkpoint serialization races and improved background GC victim selection under high disk fill ratios.
+- **Asynchronous I/O:** Fixed block allocation race conditions in multi-threaded asynchronous I/O paths and addressed stale inode writeback metadata leaks.
 
 ### Memory management, MGLRU and Adaptive Memory Reclaim
 
-- Introduced EVONIX Adaptive Memory Reclaim (CONFIG_EVONIX_MM_ADAPTIVE), proactively monitoring memory zones against a 64 MB cushion (evonix_reclaim_cushion_mb = 64) to wake kswapd gently before free memory hits critical low watermarks, eliminating direct reclaim latency spikes during app launches.
-- Preserved Linux 6.6 stock compaction watermark boost factors to maintain reliable buddy allocator high-order page compaction.
-- Bound Adaptive Memory Reclaim to system power-management suspend/resume notifiers using system_freezable_power_efficient_wq, ensuring zero background wakeups or battery drain while the device is suspended.
-- Enhanced MGLRU (Multi-Gen LRU) proactive aging routines, ensuring reclaim workers remain interruptible during system suspend transitions.
-- Fixed locked-memory accounting and refined zRAM swap readahead boundaries.
+- **EVONIX Adaptive Memory Reclaim (CONFIG_EVONIX_MM_ADAPTIVE):** Proactively monitors managed memory zones against a 64 MB cushion (evonix_reclaim_cushion_mb = 64) to wake kswapd gently before free memory hits critical low watermarks, eliminating direct reclaim latency spikes.
+- **Buddy Compaction Preserved:** Retains Linux 6.6 stock compaction watermark boost factors for healthy high-order page compaction.
+- **Zero Sleep Drain:** Queued on system_freezable_power_efficient_wq and bound to kernel suspend/resume notifiers, ensuring zero wakeups or battery drain while the device sleeps.
+- **MGLRU Aging:** Ensured Multi-Gen LRU proactive aging routines remain interruptible during system suspend transitions.
 
 ### Kernel power management and thermal integration
 
-- Retained full MediaTek thermal governor and mitigation framework, ensuring hardware thermal protection limits remain authoritative across all CPU clusters and charging circuits.
-- Bound all EVONIX background workers to power-efficient, freezeable workqueues to maximize deep-sleep residency.
-- Corrected timer slack inheritance for normal tasks spawned from real-time parents, reducing unnecessary CPU package wakeups.
-- Verified deep sleep and suspend/resume cycles on hardware, maintaining minimal standby battery drain.
+- **Authoritative Thermal Mitigation:** Retained full MediaTek thermal governor protection across all CPU clusters and battery charging circuitry.
+- **Power-Efficient Workqueues:** Bound all EVONIX background workers to freezable, power-efficient workqueues to maximize deep-sleep residency.
+- **Timer Slack Correction:** Corrected timer slack inheritance for normal tasks spawned from real-time parents, reducing unnecessary CPU package wakeups.
+- **Hardware-Verified Standby:** Verified deep sleep (suspend-to-RAM) cycles on hardware, maintaining minimal standby battery drain.
 
 ### Networking and congestion control
 
-- Enabled BBRv3 as the default TCP congestion control algorithm for improved throughput and lower queueing latency on cellular and Wi-Fi networks.
-- Enabled CAKE, PIE, and FQ-PIE queue disciplines for bufferbloat mitigation.
-- Enabled IP Sets (CONFIG_IP_SET) with hash:ip, hash:net, and hash:mac types.
-- Enabled full IPv6 NAT (CONFIG_IP6_NF_NAT, CONFIG_IP6_NF_TARGET_MASQUERADE) and TTL/Hop-Limit manipulation (CONFIG_NETFILTER_XT_TARGET_HL).
-- Integrated upstream TCP retransmission lifetime fixes and UDP tunnel segmentation hardening.
+- **BBRv3 Default:** Configured BBRv3 as the default TCP congestion control algorithm for higher throughput and reduced bufferbloat over cellular and Wi-Fi networks.
+- **Queue Disciplines:** Enabled CAKE, PIE, and FQ-PIE packet schedulers for active queue management.
+- **IP Sets and Filtering:** Enabled CONFIG_IP_SET with hash:ip, hash:net, and hash:mac types.
+- **IPv6 NAT and TTL:** Enabled full IPv6 NAT, masquerade targets, and TTL/Hop-Limit manipulation (CONFIG_NETFILTER_XT_TARGET_HL).
+- **Transport Layer Hardening:** Integrated upstream fixes for TCP retransmission lifetimes and UDP tunnel segmentation.
 
 ### NTSync and Windows synchronization
 
-- Backported the upstream Linux NTSync driver (CONFIG_NTSYNC), exposing /dev/ntsync for fast Windows NT synchronization primitive emulation.
-- Replaces high-overhead userspace eventfd synchronization with direct kernel-level primitives for NT mutexes, semaphores, and events.
-- Accelerates game execution and improves frame pacing in Wine, Proton, Winlator, and Mobox Windows translation environments.
+- **Fast NT Synchronization (CONFIG_NTSYNC):** Backported the upstream Linux NTSync driver, exposing /dev/ntsync for fast Windows NT synchronization primitive emulation.
+- **In-Kernel Primitives:** Replaces high-overhead userspace eventfd synchronization with direct kernel-level primitives for NT mutexes, semaphores, and events.
+- **Gaming Performance:** Substantially improves frame pacing and reduces CPU translation overhead in Wine, Proton, Winlator, and Mobox environments.
 
 ### Container support and Droidspaces
 
-- Unlocked all kernel prerequisites for Linux containers, Droidspaces, Docker, and rootless Linux distributions without modifying the Google KMI ABI.
-- Re-routed System V IPC (sysvsem, sysvshm) structures through unused KMI reserved fields in struct task_struct, achieving zero KMI symbol and structure offset violations.
-- Enabled User Namespaces (CONFIG_USER_NS=y) with full UID/GID mapping support (up to 26,926 user namespaces).
-- Enabled PID, Network, Mount, UTS, and IPC namespace isolation.
-- Enabled POSIX Message Queues (CONFIG_POSIX_MQUEUE) mounted at /dev/mqueue.
-- Enabled Virtual Ethernet (CONFIG_VETH) pair creation and MACVLAN network device support.
+- **Zero KMI Breakage:** Routed System V IPC structures (sysvsem, sysvshm) through unused KMI reserved fields in struct task_struct, achieving zero symbol or structure offset violations.
+- **User Namespaces (CONFIG_USER_NS):** Full UID/GID mapping support with up to 26,926 user namespaces.
+- **Full Namespace Isolation:** Unlocked PID, Network, Mount, UTS, and IPC namespaces.
+- **POSIX Message Queues (CONFIG_POSIX_MQUEUE):** Mounted at /dev/mqueue.
+- **Virtual Networking:** Enabled Virtual Ethernet (CONFIG_VETH) pairs and MACVLAN network device drivers for container runtimes and Droidspaces.
 
 ### Root frameworks (KernelSU-Next, BakaSU, SUSFS v2.4.0, NoMount)
 
-- KernelSU-Next editions (hyperos/ksu-susfs, coloros/ksu-susfs):
+- **KernelSU-Next Editions (hyperos/ksu-susfs, coloros/ksu-susfs):**
   - Integrated KernelSU-Next v3.4.2 (commit 26499d89fb).
-  - Integrated SUSFS v2.4.0 with comprehensive kernel-level path, mount, and cgroup hiding.
-  - Integrated NoMount subsystem (2,779 lines in fs/nomount/), providing high-performance in-kernel VFS path redirection as a lightweight alternative to overlay mounts for systemless modules.
-- BakaSU editions (bakasu/hyperos-susfs, bakasu/coloros-susfs):
+  - Integrated SUSFS v2.4.0 with kernel-level path, mount, and cgroup hiding.
+  - Integrated NoMount subsystem (2,779 lines in fs/nomount/) for high-performance in-kernel VFS path redirection as a lightweight alternative to overlay mounts.
+- **BakaSU Editions (bakasu/hyperos-susfs, bakasu/coloros-susfs):**
   - Integrated BakaSU with dedicated SUSFS 2.4.0 SELinux bridge (ksu_security_context_to_sid_with_policy) for stealth operation under enforcing SELinux.
   - Integrated SUSFS v2.4.0 and NoMount subsystem.
-- Normal editions (hyperos/normal, coloros/normal):
-  - Completely rootless standard GKI builds with zero root hooks, zero symbols (0 ksu_*, 0 susfs_*, 0 nomount_*), and 100% stock security architecture for users requiring pure system integrity.
+- **Normal Editions (hyperos/normal, coloros/normal):**
+  - Pure rootless standard GKI builds with zero root hooks and zero symbols (0 ksu_*, 0 susfs_*, 0 nomount_*) for users requiring stock security integrity.
 
 ### Platform compatibility (HyperOS and ColorOS)
 
-- HyperOS editions:
-  - Native integration with Xiaomi HyperOS 4 / Android 17 userspace.
-  - Full compatibility with MediaTek Dimensity 8400-Ultra vendor modules and proprietary services.
-  - Verified hardware charging-bypass backend via standard OEM interfaces.
-- ColorOS editions:
-  - Dedicated MT6899 OPlus SchedAssist integration with isolated scheduler data structures.
-  - FrameBoost integration with corrected cluster ordering and CPUFreq-aware initialization.
-  - Integrated OPlus MIDAS v2, process-reclaim helpers, and HealthInfo Lite CPU-loading support.
-  - Full compatibility with ColorOS port ROMs for Rodin.
+- **HyperOS Editions:** Native integration with Xiaomi HyperOS 4 / Android 17 userspace, full Dimensity 8400-Ultra vendor module compatibility, and hardware charging bypass via standard OEM interfaces.
+- **ColorOS Editions:** Dedicated MT6899 OPlus SchedAssist integration with isolated scheduler data structures, FrameBoost integration with corrected cluster ordering, OPlus MIDAS v2, process-reclaim helpers, and HealthInfo Lite CPU-loading support.
 
 ### Build system, compiler optimizations and testing infrastructure
 
-- Compiled using official Android Clang r614150 (Clang 23.0.1) with LLVM LLD linker.
-- Configured with full ThinLTO (Thin Link-Time Optimization) and AutoFDO (Feedback-Directed Optimization) profile data.
-- Built under Google Kleaf/Bazel build environment for reproducible release images.
-- Comprehensive selftest test harness covering scheduler headroom, governor switching, ADIOS dispatch ordering, and container namespace isolation.
+- **Compiler Toolchain:** Compiled with official Android Clang r614150 (23.0.1) and LLVM LLD.
+- **Advanced Optimizations:** ThinLTO and AutoFDO profile-guided optimization.
+- **Kleaf/Bazel Integration:** Built within Google Kleaf hermetic build system.
+- **Test Harness:** Comprehensive selftest suite covering scheduler headroom, governor switching, ADIOS dispatch ordering, and container namespace isolation.
+
 
 ## V4.5
 
