@@ -14,7 +14,7 @@ from evonix_policy_test import function
 ROOT = Path(__file__).resolve().parents[4]
 FAIR = (ROOT / "kernel/sched/fair.c").read_text()
 BASE = subprocess.check_output(
-    ["git", "show", "f0715c711b58b418b03f1d928b2a4ec04adb79c6:kernel/sched/fair.c"], cwd=ROOT, text=True)
+    ["git", "show", "f002a55c7f0a8:kernel/sched/fair.c"], cwd=ROOT, text=True)
 
 
 def guard(source):
