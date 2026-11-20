@@ -835,6 +835,17 @@ static ssize_t store_scaling_governor(struct cpufreq_policy *policy,
 	if (ret != 1)
 		return -EINVAL;
 
+	/* EVONIX Schedutil Default Guard:
+	 * MediaTek vendor init unconditionally writes 'sugov_ext' at early boot
+	 * (/vendor/etc/init/hw/init.cgroup.rc).
+	 * Redirect vendor 'sugov_ext' writes to EVONIX Enhanced Schedutil so that
+	 * schedutil remains the active system default governor, while keeping all
+	 * other governor choices (performance, powersave, conservative, schedutil)
+	 * fully available and switchable by users.
+	 */
+	if (!strcmp(str_governor, "sugov_ext"))
+		strscpy(str_governor, "schedutil", sizeof(str_governor));
+
 	if (cpufreq_driver->setpolicy) {
 		unsigned int new_pol;
 
