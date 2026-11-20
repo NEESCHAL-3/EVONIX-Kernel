@@ -18,6 +18,9 @@ struct sugov_tunables {
 	unsigned int		down_rate_limit_us;
 	unsigned int		headroom_mode;
 	unsigned int		idle_fast_down;
+#ifdef CONFIG_EVONIX_SCHED_RESPONSIVE
+	unsigned int		ui_boost_pct;
+#endif
 #endif
 };
 
@@ -288,6 +291,29 @@ static void sugov_get_util(struct sugov_cpu *sg_cpu)
 	sg_cpu->bw_dl = cpu_bw_dl(rq);
 	sg_cpu->util = effective_cpu_util(sg_cpu->cpu, util,
 					  FREQUENCY_UTIL, NULL);
+#if defined(CONFIG_EVONIX_SCHEDUTIL) && defined(CONFIG_EVONIX_SCHED_RESPONSIVE)
+	if (sg_cpu->sg_policy && sg_cpu->sg_policy->tunables) {
+		unsigned int ui_boost = sg_cpu->sg_policy->tunables->ui_boost_pct;
+
+		if (ui_boost > 0) {
+			struct task_struct *curr;
+
+			rcu_read_lock();
+			curr = READ_ONCE(rq->curr);
+			if (curr && !is_idle_task(curr) && curr->sched_class == &fair_sched_class) {
+				struct task_group *tg = task_group(curr);
+
+				if (tg && READ_ONCE(tg->latency_sensitive)) {
+					unsigned long max = arch_scale_cpu_capacity(sg_cpu->cpu);
+					unsigned long boost_add = (max * ui_boost) / 100;
+
+					sg_cpu->util = min(max, sg_cpu->util + boost_add);
+				}
+			}
+			rcu_read_unlock();
+		}
+	}
+#endif
 }
 
 /**
@@ -802,6 +828,29 @@ static struct governor_attr up_rate_limit_us = __ATTR_RW(up_rate_limit_us);
 static struct governor_attr down_rate_limit_us = __ATTR_RW(down_rate_limit_us);
 static struct governor_attr headroom_mode = __ATTR_RW(headroom_mode);
 static struct governor_attr idle_fast_down = __ATTR_RW(idle_fast_down);
+#ifdef CONFIG_EVONIX_SCHED_RESPONSIVE
+static ssize_t ui_boost_pct_show(struct gov_attr_set *attr_set, char *buf)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+
+	return sprintf(buf, "%u\n", tunables->ui_boost_pct);
+}
+
+static ssize_t
+ui_boost_pct_store(struct gov_attr_set *attr_set, const char *buf, size_t count)
+{
+	struct sugov_tunables *tunables = to_sugov_tunables(attr_set);
+	unsigned int val;
+
+	if (kstrtouint(buf, 10, &val) || val > 100)
+		return -EINVAL;
+
+	tunables->ui_boost_pct = val;
+	return count;
+}
+
+static struct governor_attr ui_boost_pct = __ATTR_RW(ui_boost_pct);
+#endif
 #endif
 
 static struct attribute *sugov_attrs[] = {
@@ -811,6 +860,9 @@ static struct attribute *sugov_attrs[] = {
 	&down_rate_limit_us.attr,
 	&headroom_mode.attr,
 	&idle_fast_down.attr,
+#ifdef CONFIG_EVONIX_SCHED_RESPONSIVE
+	&ui_boost_pct.attr,
+#endif
 #endif
 	NULL
 };
@@ -927,6 +979,9 @@ static struct sugov_tunables *sugov_tunables_alloc(struct sugov_policy *sg_polic
 		tunables->down_rate_limit_us = 4000;
 		tunables->headroom_mode = 1;
 		tunables->idle_fast_down = 0;
+#ifdef CONFIG_EVONIX_SCHED_RESPONSIVE
+		tunables->ui_boost_pct = 20;
+#endif
 #endif
 	}
 	return tunables;
