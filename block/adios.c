@@ -706,13 +706,15 @@ void set_adios_state(struct adios_data *ad, u32 shift, u32 idx, bool flag) {
 	if (flag) {
 		smp_wmb();
 		atomic_or(1U << (idx + shift), &ad->state);
+		smp_mb__after_atomic();
 	} else {
 		atomic_andnot(1U << (idx + shift), &ad->state);
+		smp_mb__after_atomic();
 	}
 }
 
 static inline u32 get_adios_state(struct adios_data *ad)
-{ return atomic_read(&ad->state); }
+{ return (u32)atomic_read_acquire(&ad->state); }
 
 static inline u32 eval_this_adios_state(u32 state, u32 shift)
 { return (state >> shift) & 0x3; }
@@ -1297,23 +1299,22 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 	u32 pq_state;
 
 	/* Lockless check: probe priority state with acquire barrier */
-	if (!eval_adios_state(ad, ADIOS_STATE_PQ))
+	pq_state = eval_adios_state(ad, ADIOS_STATE_PQ);
+	if (!pq_state)
 		return NULL;
 
 	smp_rmb();
 
 #ifdef CONFIG_EVONIX_IO_PRIO
 	/* Anti-starvation guard: if sustained Tier-1 foreground reads have dispatched
-	 * for >= 8 consecutive requests, and normal queues (batch queue / deadline tree)
+	 * for >= 8 consecutive requests, only Tier-1 is pending (Tier-0 emergency head
+	 * requests are strictly exempt), and normal queues (batch queue / deadline tree)
 	 * have pending work, yield to prevent normal I/O starvation.
-	 * Tier-0 (emergency head requests) is strictly exempt from this quota.
 	 */
-	if (READ_ONCE(ad->pq1_dispatch_count) >= 8) {
-		u32 normal_state = eval_adios_state(ad, ADIOS_STATE_BQ | ADIOS_STATE_DL);
-		if (normal_state) {
-			/* Yield to normal queues */
+	if (READ_ONCE(ad->pq1_dispatch_count) >= 8 && !(pq_state & 1)) {
+		u32 state = get_adios_state(ad);
+		if (state & ((3U << ADIOS_STATE_BQ) | (3U << ADIOS_STATE_DL)))
 			return NULL;
-		}
 	}
 #endif
 
@@ -1323,6 +1324,14 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 		return NULL;
 
 	u8  pq_idx = !(pq_state & 1);
+#ifdef CONFIG_EVONIX_IO_PRIO
+	if (pq_idx == 1 && ad->pq1_dispatch_count >= 8) {
+		u32 state = get_adios_state(ad);
+		if (state & ((3U << ADIOS_STATE_BQ) | (3U << ADIOS_STATE_DL)))
+			return NULL;
+	}
+#endif
+
 	struct list_head *q = &ad->prio_queue[pq_idx];
 
 	if (unlikely(list_empty(q))) return NULL;
@@ -1459,7 +1468,7 @@ static void adios_finish_request(struct request *rq) {
 static bool adios_has_work(struct blk_mq_hw_ctx *hctx) {
 	struct adios_data *ad = hctx->queue->elevator->elevator_data;
 
-	return atomic_read(&ad->state) != 0;
+	return get_adios_state(ad) != 0;
 }
 
 // Initialize the scheduler-specific data for a hardware queue
