@@ -1361,8 +1361,7 @@ config EVONIX_MM_OPTIMIZE
 	  Enables EVONIX mobile memory optimizations for systems with
 	  Multi-Gen LRU (MGLRU) and compressed swap (ZRAM).
 
-	  Specifically, disables aggressive watermark boosting
-	  (setting default watermark_boost_factor to 0 instead of 15000),
+	  Specifically, manages aggressive watermark boosting,
 	  preventing kswapd from over-reclaiming warm page caches and
 	  thrashing ZRAM during high-order burst allocations (e.g. camera
 	  preview buffers, graphics allocations, and app cold starts).
@@ -1371,6 +1370,17 @@ config EVONIX_MM_OPTIMIZE
 	  accessible for runtime adjustment and rollback.
 
 	  If unsure, say Y.
+
+config EVONIX_MM_ADAPTIVE
+	bool "EVONIX Adaptive Memory Reclaim Controller"
+	default y
+	help
+	  Provides proactive asynchronous memory reclaim headroom before
+	  foreground allocations fall below min watermarks and enter direct reclaim.
+	  Monitors zone free pages and gently triggers kswapd when available memory
+	  approaches a configurable cushion above high watermarks.
+	  Tunable via /proc/sys/vm/evonix_adaptive_reclaim and
+	  /proc/sys/vm/evonix_reclaim_cushion_mb.
 
 source "mm/damon/Kconfig"
 

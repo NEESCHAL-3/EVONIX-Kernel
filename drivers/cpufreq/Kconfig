@@ -221,6 +221,17 @@ config EVONIX_SCHEDUTIL
 	  (boosted response at low/mid loads, thermal-capped at high loads),
 	  and idle fast-downscaling.
 
+config EVONIX_SCHED_RESPONSIVE
+	bool "EVONIX Workload-Aware UI Responsiveness Engine"
+	depends on EVONIX_SCHEDUTIL
+	default y
+	help
+	  Enables workload-aware UI capacity boost in the EVONIX Enhanced Schedutil
+	  governor for tasks in latency-sensitive task groups (such as Android
+	  top-app UI render threads). Ensures immediate frequency ramp for UI
+	  frame delivery within 8.3ms (120Hz display deadline) without relying
+	  on slow PELT ramp-up or locking high baseline frequencies.
+
 config EVONIX_GOVERNOR_ENFORCE
 	bool "Enforce EVONIX Schedutil as Active Governor"
 	depends on EVONIX_SCHEDUTIL
