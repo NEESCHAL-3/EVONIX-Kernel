@@ -291,6 +291,19 @@ int security_context_str_to_sid(const char *scontext, u32 *out_sid, gfp_t gfp);
 int security_context_to_sid_default(const char *scontext, u32 scontext_len,
 				    u32 *out_sid, u32 def_sid, gfp_t gfp_flags);
 
+#ifdef CONFIG_KSU_SUSFS
+int security_context_to_sid_with_policy(struct selinux_policy *policy,
+				       const char *scontext, u32 scontext_len,
+				       u32 *sid, u32 def_sid, gfp_t gfp_flags,
+				       u32 *orig_sid_p, int *orig_rc_p);
+int security_sid_to_context_with_policy(struct selinux_policy *policy,
+				       u32 sid, char **scontext,
+				       u32 *scontext_len);
+void security_compute_av_user_with_policy(struct selinux_policy *policy,
+					 u32 ssid, u32 tsid, u16 tclass,
+					 struct av_decision *avd);
+#endif
+
 int security_context_to_sid_force(const char *scontext, u32 scontext_len,
 				  u32 *sid);
 
