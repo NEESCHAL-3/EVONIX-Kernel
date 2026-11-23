@@ -1293,8 +1293,23 @@ static struct request *dispatch_from_bq(struct adios_data *ad) {
 	return NULL;
 }
 
+#ifdef CONFIG_EVONIX_IO_PRIO
+/*
+ * Reset Tier-1 dispatch count under pq_lock when normal (BQ) or Tier-0 requests
+ * dispatch. Lockless early check avoids spinlock acquisition on non-bursting paths.
+ */
+static inline void adios_reset_pq1_dispatch_count(struct adios_data *ad) {
+	if (READ_ONCE(ad->pq1_dispatch_count)) {
+		guard(spinlock_irqsave)(&ad->pq_lock);
+		ad->pq1_dispatch_count = 0;
+	}
+}
+#else
+static inline void adios_reset_pq1_dispatch_count(struct adios_data *ad) {}
+#endif
+
 // Dispatch a request from the priority queue
-static struct request *dispatch_from_pq(struct adios_data *ad) {
+static struct request *dispatch_from_pq(struct adios_data *ad, bool force) {
 	struct request *rq = NULL;
 	u32 pq_state;
 
@@ -1310,12 +1325,17 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 	 * for >= 8 consecutive requests, only Tier-1 is pending (Tier-0 emergency head
 	 * requests are strictly exempt), and normal queues (batch queue / deadline tree)
 	 * have pending work, yield to prevent normal I/O starvation.
+	 *
+	 * When force is true (fallback recovery when BQ could not produce a request),
+	 * bypass the yield to guarantee forward progress and prevent queue stalls.
 	 */
-	if (READ_ONCE(ad->pq1_dispatch_count) >= 8 && !(pq_state & 1)) {
+	if (!force && READ_ONCE(ad->pq1_dispatch_count) >= 8 && !(pq_state & 1)) {
 		u32 state = get_adios_state(ad);
 		if (state & ((3U << ADIOS_STATE_BQ) | (3U << ADIOS_STATE_DL)))
 			return NULL;
 	}
+#else
+	(void)force;
 #endif
 
 	guard(spinlock_irqsave)(&ad->pq_lock);
@@ -1325,7 +1345,7 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 
 	u8  pq_idx = !(pq_state & 1);
 #ifdef CONFIG_EVONIX_IO_PRIO
-	if (pq_idx == 1 && ad->pq1_dispatch_count >= 8) {
+	if (!force && pq_idx == 1 && ad->pq1_dispatch_count >= 8) {
 		u32 state = get_adios_state(ad);
 		if (state & ((3U << ADIOS_STATE_BQ) | (3U << ADIOS_STATE_DL)))
 			return NULL;
@@ -1344,10 +1364,14 @@ static struct request *dispatch_from_pq(struct adios_data *ad) {
 	}
 
 #ifdef CONFIG_EVONIX_IO_PRIO
-	if (pq_idx == 1)
-		ad->pq1_dispatch_count++;
-	else
+	if (pq_idx == 1) {
+		if (list_empty(q))
+			ad->pq1_dispatch_count = 0;
+		else if (ad->pq1_dispatch_count < 8)
+			ad->pq1_dispatch_count++;
+	} else {
 		ad->pq1_dispatch_count = 0;
+	}
 #endif
 
 	return rq;
@@ -1359,15 +1383,13 @@ static struct request *adios_dispatch_request(struct blk_mq_hw_ctx *hctx) {
 	struct adios_data *ad = hctx->queue->elevator->elevator_data;
 	struct request *rq;
 
-	rq = dispatch_from_pq(ad);
+	rq = dispatch_from_pq(ad, false);
 	if (rq)
 		goto found;
 
 	rq = dispatch_from_bq(ad);
 	if (rq) {
-#ifdef CONFIG_EVONIX_IO_PRIO
-		ad->pq1_dispatch_count = 0;
-#endif
+		adios_reset_pq1_dispatch_count(ad);
 		goto found;
 	}
 
@@ -1375,12 +1397,11 @@ static struct request *adios_dispatch_request(struct blk_mq_hw_ctx *hctx) {
 	/*
 	 * Fallback recovery: if dispatch_from_pq yielded due to anti-starvation quota
 	 * (ad->pq1_dispatch_count >= 8) but dispatch_from_bq was unable to produce a
-	 * request (e.g. ongoing batch completion or empty BQ page), reset the quota
-	 * and dispatch from PQ to prevent queue stalling or deadlocks.
+	 * request (e.g. ongoing batch completion or empty BQ page), force dispatch
+	 * from PQ under pq_lock to maintain forward progress and prevent queue stalling.
 	 */
 	if (READ_ONCE(ad->pq1_dispatch_count) >= 8) {
-		ad->pq1_dispatch_count = 0;
-		rq = dispatch_from_pq(ad);
+		rq = dispatch_from_pq(ad, true);
 		if (rq)
 			goto found;
 	}
