@@ -105,6 +105,7 @@
 #include "netlabel.h"
 #include "audit.h"
 #include "avc_ss.h"
+#include "security.h"
 
 #define SELINUX_INODE_INIT_XATTRS 1
 
@@ -113,13 +114,6 @@ struct selinux_state selinux_state;
 #ifdef CONFIG_KSU_SUSFS
 extern struct selinux_policy *backup_sepolicy;
 extern bool ksu_selinux_hide_running __read_mostly;
-extern int security_context_to_sid_with_policy(
-	struct selinux_policy *policy,
-	const char *scontext,
-	u32 scontext_len,
-	u32 *sid,
-	u32 def_sid,
-	gfp_t gfp_flags);
 #endif
 
 
@@ -6665,7 +6659,7 @@ static int my_setprocattr(const char *name, void *value, size_t size)
 			size--;
 		}
 
-		error = security_context_to_sid_with_policy(backup_sepolicy, str, size, &sid, SECSID_NULL, GFP_KERNEL);
+		error = security_context_to_sid_with_policy(backup_sepolicy, str, size, &sid, SECSID_NULL, GFP_KERNEL, NULL, NULL);
 		if (error)
 			return error;
 	}
