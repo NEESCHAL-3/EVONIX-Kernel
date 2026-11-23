@@ -1371,6 +1371,21 @@ static struct request *adios_dispatch_request(struct blk_mq_hw_ctx *hctx) {
 		goto found;
 	}
 
+#ifdef CONFIG_EVONIX_IO_PRIO
+	/*
+	 * Fallback recovery: if dispatch_from_pq yielded due to anti-starvation quota
+	 * (ad->pq1_dispatch_count >= 8) but dispatch_from_bq was unable to produce a
+	 * request (e.g. ongoing batch completion or empty BQ page), reset the quota
+	 * and dispatch from PQ to prevent queue stalling or deadlocks.
+	 */
+	if (READ_ONCE(ad->pq1_dispatch_count) >= 8) {
+		ad->pq1_dispatch_count = 0;
+		rq = dispatch_from_pq(ad);
+		if (rq)
+			goto found;
+	}
+#endif
+
 	return NULL;
 found:
 	if (ad->is_rotational)
