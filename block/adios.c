@@ -1295,14 +1295,14 @@ static struct request *dispatch_from_bq(struct adios_data *ad) {
 
 #ifdef CONFIG_EVONIX_IO_PRIO
 /*
- * Reset Tier-1 dispatch count under pq_lock when normal (BQ) or Tier-0 requests
- * dispatch. Lockless early check avoids spinlock acquisition on non-bursting paths.
+ * Reset Tier-1 dispatch count under pq_lock when a normal (BQ) request is dispatched.
+ * Unconditionally holding pq_lock serializes counter reset with concurrent PQ dispatches
+ * across multiple hardware contexts (UFS MCQ), eliminating race windows and guaranteeing
+ * strict linearization of anti-starvation quota tracking.
  */
 static inline void adios_reset_pq1_dispatch_count(struct adios_data *ad) {
-	if (READ_ONCE(ad->pq1_dispatch_count)) {
-		guard(spinlock_irqsave)(&ad->pq_lock);
-		ad->pq1_dispatch_count = 0;
-	}
+	guard(spinlock_irqsave)(&ad->pq_lock);
+	ad->pq1_dispatch_count = 0;
 }
 #else
 static inline void adios_reset_pq1_dispatch_count(struct adios_data *ad) {}
