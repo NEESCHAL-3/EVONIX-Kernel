@@ -1,3 +1,25 @@
+# EVONIX KERNEL V4.6.1 -- TECHNICAL MAINTENANCE CHANGELOG
+
+**Target Platform:** Xiaomi POCO X7 Pro / Redmi Turbo 4 (`rodin` / `24129RT7CC`)  
+**SoC:** MediaTek Dimensity 8400-Ultra (`MT6899`) -- All-Big-Core (8x Cortex-A725)  
+**Kernel Baseline:** Linux 6.6.144 Android GKI (LTS)  
+**Toolchain:** Android Clang r614150 (23.0.1) + LLD + ThinLTO + AutoFDO  
+**Baseline Release:** EVONIX V4.6 (`b3c46ddbb8740`, 2026-11-20)  
+**Release Tag:** `v4.6.1`  
+**Developer:** NEESCHAL  
+
+---
+
+## Executive Summary
+
+EVONIX Kernel V4.6.1 is a targeted maintenance and stability release addressing regressions identified in V4.6:
+1. **SELinux Hook ABI Alignment (GitHub Issue #6):** In Linux 6.6 GKI, `security_context_to_sid_with_policy()` takes 8 arguments (`const struct selinux_policy *policy, const char *scontext, u32 scontext_len, u32 *sid, u32 def_sid, gfp_t gfp_flags, int force, int verbose`). KernelSU-Next's hook invoked it with 7 arguments, clobbering caller registers and faulting on pointer dereference at write `0x800` during app startup with `selinux_hide` enabled. Corrected prototype and argument marshalling across KernelSU-Next and BakaSU editions.
+2. **ADIOS Multi-Queue Concurrency Serialization:** `adios_reset_pq1_dispatch_count()` previously performed an early `READ_ONCE()` check and reset without acquiring `pq_lock`, while `dispatch_from_pq()` updated the counter under lock. Re-architected with unconditional `spin_lock_irqsave(&q->pq_lock, flags)` linearization, preserving strict anti-starvation forward progress across concurrent UFS MCQ dispatchers.
+3. **ColorOS Governor Selection Compatibility (GitHub Issue #5):** Restored native `sugov_ext` CPU governor compatibility on ColorOS ports, eliminating boot stalls caused by userspace governor policy rejections, while preserving enhanced Schedutil behavior on HyperOS.
+4. **Namespace and Container Preservation:** Verified complete preservation of all Linux namespaces (`CONFIG_USER_NS`, `CONFIG_PID_NS`, `CONFIG_IPC_NS`, `CONFIG_NET_NS`, `CONFIG_UTS_NS`, `CONFIG_SYSVIPC`, `CONFIG_POSIX_MQUEUE`) with zero Android KMI violations.
+
+---
+
 # EVONIX KERNEL V4.6 — COMPLETE HISTORICAL TECHNICAL CHANGELOG
 **Target Platform:** Xiaomi POCO X7 Pro / Redmi Turbo 4 (`rodin` / `24129RT7CC`)  
 **SoC:** MediaTek Dimensity 8400-Ultra (`MT6899`) — All-Big-Core (8× Cortex-A725)  
