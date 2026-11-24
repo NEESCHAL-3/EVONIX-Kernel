@@ -1,18 +1,18 @@
-# Install EVONIX V4.6
+# Install EVONIX V4.6.1
 
 For POCO X7 Pro / Redmi Turbo 4 (`rodin`). Download release packages from the
-[V4.6 release](https://github.com/NEESCHAL-3/EVONIX-Kernel/releases/tag/v4.6).
+[V4.6.1 release](https://github.com/NEESCHAL-3/EVONIX-Kernel/releases/tag/v4.6.1).
 
 ## Choose the right ZIP
 
 | ROM | Edition | Package filename |
 | --- | --- | --- |
-| HyperOS | KernelSU Next + SUSFS | `EVONIX-V4.6-HyperOS-KSU-SUSFS-rodin.zip` |
-| HyperOS | BakaSU + SUSFS | `EVONIX-V4.6-HyperOS-BakaSU-SUSFS-rodin.zip` |
-| HyperOS | Normal (no built-in root) | `EVONIX-V4.6-HyperOS-Normal-rodin.zip` |
-| ColorOS port | KernelSU Next + SUSFS | `EVONIX-V4.6-ColorOS-KSU-SUSFS-rodin.zip` |
-| ColorOS port | BakaSU + SUSFS | `EVONIX-V4.6-ColorOS-BakaSU-SUSFS-rodin.zip` |
-| ColorOS port | Normal (no built-in root) | `EVONIX-V4.6-ColorOS-Normal-rodin.zip` |
+| HyperOS | KernelSU Next + SUSFS | `EVONIX-V4.6.1-HyperOS-KSU-SUSFS-rodin.zip` |
+| HyperOS | BakaSU + SUSFS | `EVONIX-V4.6.1-HyperOS-BakaSU-SUSFS-rodin.zip` |
+| HyperOS | Normal (no built-in root) | `EVONIX-V4.6.1-HyperOS-Normal-rodin.zip` |
+| ColorOS port | KernelSU Next + SUSFS | `EVONIX-V4.6.1-ColorOS-KSU-SUSFS-rodin.zip` |
+| ColorOS port | BakaSU + SUSFS | `EVONIX-V4.6.1-ColorOS-BakaSU-SUSFS-rodin.zip` |
+| ColorOS port | Normal (no built-in root) | `EVONIX-V4.6.1-ColorOS-Normal-rodin.zip` |
 
 Normal, BakaSU, and KernelSU Next editions include the same core kernel optimizations.
 Match the ZIP to your ROM family; do not use the ColorOS ZIP on HyperOS or vice versa.

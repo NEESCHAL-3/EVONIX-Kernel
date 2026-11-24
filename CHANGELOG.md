@@ -1,5 +1,28 @@
 # Changelog
 
+## V4.6.1
+
+**Maintenance & Stability Update**
+
+- Corrected KernelSU-Next SELinux hook ABI mismatch.
+- Harmonized BakaSU SELinux integration.
+- Fixed ADIOS dispatch counter synchronization.
+- Improved I/O queue forward progress and starvation recovery.
+- Improved multi-queue dispatch synchronization.
+- Restored native sugov_ext governor selection on ColorOS.
+- Preserved enhanced Schedutil behavior on HyperOS.
+- Preserved ADIOS as the default I/O scheduler.
+- Retained all namespace and container support.
+- Added SELinux prototype and ADIOS concurrency regression tests.
+- Retained Linux 6.6.144 Android GKI baseline.
+
+**Available Variants**
+
+- HyperOS -- KSU + SUSFS / BakaSU + SUSFS / Normal
+- ColorOS -- KSU + SUSFS / BakaSU + SUSFS / Normal
+
+Special thanks to everyone who reported issues and helped with hardware testing.
+
 ## V4.6
 
 **Branch coverage:** The complete EVONIX V4.6 changelog is maintained across all six supported source branches. Shared kernel improvements are integrated across applicable variants, while ROM-specific and root-framework-specific components remain exclusive to their respective editions. The `coloros/ksu-susfs-permissive` branch is excluded from this release and remains unchanged.
