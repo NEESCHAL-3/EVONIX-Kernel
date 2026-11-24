@@ -201,9 +201,9 @@ class LifetimeContracts(unittest.TestCase):
         # Top-level Makefile only has official 6.6.144 and V4.6 version bumps
         base_mf = re.sub(r"(SUBLEVEL = )\d+", r"\g<1>144", source("Makefile", True))
         if "-COS-O+-" in source("Makefile"):
-            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>COS-O+-V4.6", base_mf)
+            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>COS-O+-V4.6.1", base_mf)
         else:
-            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>HOS-V4.6", base_mf)
+            base_mf = re.sub(r"(EXTRAVERSION = -EVONIX-)[^\n]+", r"\g<1>HOS-V4.6.1", base_mf)
         self.assertEqual(base_mf, source("Makefile"))
         base_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config", True).splitlines() if l.strip() and not l.strip().startswith("#"))
         curr_lines = set(l.strip() for l in source("arch/arm64/configs/evonix.config").splitlines() if l.strip() and not l.strip().startswith("#"))
